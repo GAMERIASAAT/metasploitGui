@@ -31,10 +31,13 @@ export interface Module {
 }
 
 export interface ModuleOption {
+  type?: string
   required: boolean
   description: string
   default: string | number | boolean | null
-  value: string | number | boolean | null
+  value?: string | number | boolean | null
+  advanced?: boolean
+  evasion?: boolean
 }
 
 export interface Job {

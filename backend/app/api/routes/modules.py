@@ -137,16 +137,55 @@ async def execute_module(
     if not msf_client.connected:
         raise HTTPException(status_code=503, detail="Metasploit RPC not connected")
 
-    if module_type != "exploit":
-        raise HTTPException(status_code=400, detail="Only exploit modules can be executed via this endpoint")
+    valid_types = ["exploit", "auxiliary", "post"]
+    if module_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"Only {valid_types} modules can be executed via this endpoint")
 
     try:
-        result = await msf_client.run_exploit(
-            module_name,
-            request.options,
-            request.payload,
-            request.payload_options
-        )
+        if module_type == "exploit":
+            result = await msf_client.run_exploit(
+                module_name,
+                request.options,
+                request.payload,
+                request.payload_options
+            )
+        else:
+            # For auxiliary and post modules
+            result = await msf_client.run_module(
+                module_type,
+                module_name,
+                request.options
+            )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/jobs")
+async def list_module_jobs(user=Depends(get_current_active_user)):
+    """List all running module jobs."""
+    if not msf_client.connected:
+        raise HTTPException(status_code=503, detail="Metasploit RPC not connected")
+
+    try:
+        jobs = await msf_client.list_jobs()
+        return {"jobs": jobs, "count": len(jobs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/jobs/{job_id}")
+async def get_module_job_info(job_id: str, user=Depends(get_current_active_user)):
+    """Get information about a specific job."""
+    if not msf_client.connected:
+        raise HTTPException(status_code=503, detail="Metasploit RPC not connected")
+
+    try:
+        job_info = await msf_client.get_job_info(job_id)
+        if not job_info:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return job_info
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

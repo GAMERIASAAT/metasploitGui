@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useModuleStore } from '../../store/moduleStore'
-import { Module } from '../../types'
+import ExecuteModuleModal from './ExecuteModuleModal'
 import {
   Search,
   Box,
@@ -41,8 +41,12 @@ export default function Modules() {
   } = useModuleStore()
 
   const [localSearch, setLocalSearch] = useState(searchQuery)
-  const [showRunModal, setShowRunModal] = useState(false)
-  const [moduleOptions, setModuleOptions] = useState<Record<string, string>>({})
+  const [showExecuteModal, setShowExecuteModal] = useState(false)
+  const [lastExecutionResult, setLastExecutionResult] = useState<{
+    status: string
+    job_id?: number
+    module?: string
+  } | null>(null)
 
   useEffect(() => {
     fetchModules(selectedType, 0, searchQuery)
@@ -61,10 +65,21 @@ export default function Modules() {
     selectModule(selectedType, moduleName)
   }
 
-  const handleRunModule = () => {
-    // This would execute the module - implementation depends on module type
-    console.log('Running module with options:', moduleOptions)
-    setShowRunModal(false)
+  const canExecuteModule = (type: string) => {
+    return ['exploit', 'auxiliary', 'post'].includes(type)
+  }
+
+  const getRunButtonLabel = (type: string) => {
+    switch (type) {
+      case 'exploit':
+        return 'Run Exploit'
+      case 'auxiliary':
+        return 'Run Auxiliary'
+      case 'post':
+        return 'Run Post'
+      default:
+        return 'Run'
+    }
   }
 
   const currentPage = Math.floor(offset / 100) + 1
@@ -226,13 +241,13 @@ export default function Modules() {
                     </div>
                   </div>
                 )}
-                {selectedType === 'exploit' && (
+                {canExecuteModule(selectedType) && (
                   <button
-                    onClick={() => setShowRunModal(true)}
+                    onClick={() => setShowExecuteModal(true)}
                     className="btn btn-primary w-full flex items-center justify-center gap-2"
                   >
                     <Play className="w-4 h-4" />
-                    Run Exploit
+                    {getRunButtonLabel(selectedType)}
                   </button>
                 )}
               </div>
@@ -246,47 +261,59 @@ export default function Modules() {
         </div>
       </div>
 
-      {/* Run Module Modal */}
-      {showRunModal && selectedModule && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-lg max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b border-msf-border flex items-center justify-between">
-              <h3 className="font-semibold text-white">Run: {selectedModule.name}</h3>
-              <button onClick={() => setShowRunModal(false)} className="text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
+      {/* Execution Result Notification */}
+      {lastExecutionResult && (
+        <div
+          className={`fixed bottom-4 right-4 p-4 rounded-lg border shadow-lg z-40 ${
+            lastExecutionResult.status === 'launched'
+              ? 'bg-green-500/10 border-green-500/30'
+              : 'bg-red-500/10 border-red-500/30'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p
+                className={`font-medium ${
+                  lastExecutionResult.status === 'launched' ? 'text-green-400' : 'text-red-400'
+                }`}
+              >
+                {lastExecutionResult.status === 'launched'
+                  ? 'Module Launched Successfully'
+                  : 'Module Execution Failed'}
+              </p>
+              {lastExecutionResult.job_id !== undefined && (
+                <p className="text-sm text-gray-400">Job ID: {lastExecutionResult.job_id}</p>
+              )}
+              {lastExecutionResult.module && (
+                <p className="text-xs text-gray-500 font-mono">{lastExecutionResult.module}</p>
+              )}
             </div>
-            <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-              {selectedModule.options &&
-                Object.entries(selectedModule.options)
-                  .filter(([, opt]) => opt.required)
-                  .map(([name, opt]) => (
-                    <div key={name}>
-                      <label className="block text-sm text-gray-300 mb-1">
-                        {name} <span className="text-msf-red">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={moduleOptions[name] || String(opt.default || '')}
-                        onChange={(e) =>
-                          setModuleOptions({ ...moduleOptions, [name]: e.target.value })
-                        }
-                        placeholder={opt.description}
-                        className="input"
-                      />
-                    </div>
-                  ))}
-            </div>
-            <div className="p-4 border-t border-msf-border flex justify-end gap-3">
-              <button onClick={() => setShowRunModal(false)} className="btn btn-secondary">
-                Cancel
-              </button>
-              <button onClick={handleRunModule} className="btn btn-primary">
-                Execute
-              </button>
-            </div>
+            <button
+              onClick={() => setLastExecutionResult(null)}
+              className="text-gray-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
+      )}
+
+      {/* Execute Module Modal */}
+      {showExecuteModal && selectedModule && (
+        <ExecuteModuleModal
+          module={selectedModule}
+          moduleType={selectedType}
+          onClose={() => setShowExecuteModal(false)}
+          onExecutionComplete={(result) => {
+            setLastExecutionResult({
+              status: result.status,
+              job_id: result.job_id,
+              module: selectedModule.name,
+            })
+            // Auto-dismiss notification after 5 seconds
+            setTimeout(() => setLastExecutionResult(null), 5000)
+          }}
+        />
       )}
     </div>
   )

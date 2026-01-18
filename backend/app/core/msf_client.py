@@ -282,6 +282,22 @@ class MetasploitClient:
 
     # ==================== Exploits & Handlers ====================
 
+    async def run_module(self, module_type: str, module_name: str, options: dict) -> dict:
+        """Run a module (auxiliary, post, etc.) using direct API."""
+        def _run():
+            # Build datastore with all options
+            datastore = {**options}
+
+            # Use direct module.execute API call
+            result = self._client.call('module.execute', [module_type, module_name, datastore])
+
+            return {
+                "job_id": result.get("job_id"),
+                "uuid": result.get("uuid"),
+                "status": "launched" if result.get("job_id") is not None else "failed"
+            }
+        return await self._run_sync(_run)
+
     async def run_exploit(self, module_name: str, options: dict, payload: Optional[str] = None, payload_options: Optional[dict] = None) -> dict:
         """Run an exploit module using direct API."""
         def _run():

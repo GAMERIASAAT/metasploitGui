@@ -18,12 +18,16 @@ sio = socketio.AsyncServer(
 # Track active console sessions per client
 client_consoles: Dict[str, Set[str]] = {}
 
+# Track active session subscriptions per client
+client_sessions: Dict[str, Set[int]] = {}
+
 
 @sio.event
 async def connect(sid, environ):
     """Handle client connection."""
     logger.info(f"Client connected: {sid}")
     client_consoles[sid] = set()
+    client_sessions[sid] = set()
     await sio.emit('connected', {'sid': sid}, to=sid)
 
 
@@ -39,6 +43,9 @@ async def disconnect(sid):
             except Exception:
                 pass
         del client_consoles[sid]
+    # Clean up any session subscriptions
+    if sid in client_sessions:
+        del client_sessions[sid]
 
 
 @sio.event
@@ -181,3 +188,73 @@ async def session_monitor(sid: str):
         except Exception as e:
             logger.error(f"Session monitor error: {e}")
             await asyncio.sleep(5)
+
+
+@sio.event
+async def subscribe_session_output(sid, data):
+    """Subscribe to session output streaming."""
+    session_id = data.get('session_id')
+    session_type = data.get('type', 'shell')
+
+    if session_id is None:
+        return
+
+    session_id = int(session_id)
+
+    if sid not in client_sessions:
+        client_sessions[sid] = set()
+
+    if session_id not in client_sessions[sid]:
+        client_sessions[sid].add(session_id)
+        asyncio.create_task(session_output_reader(sid, session_id, session_type))
+
+
+@sio.event
+async def unsubscribe_session_output(sid, data):
+    """Unsubscribe from session output streaming."""
+    session_id = data.get('session_id')
+
+    if session_id is None:
+        return
+
+    session_id = int(session_id)
+
+    if sid in client_sessions:
+        client_sessions[sid].discard(session_id)
+
+
+async def session_output_reader(sid: str, session_id: int, session_type: str):
+    """Poll session output and emit to client."""
+    # Initial delay to let session initialize
+    await asyncio.sleep(0.3)
+
+    while sid in client_sessions and session_id in client_sessions.get(sid, set()):
+        try:
+            # Check if session still exists
+            sessions = await msf_client.list_sessions()
+            if str(session_id) not in sessions:
+                await sio.emit('session_output', {
+                    'session_id': session_id,
+                    'closed': True
+                }, to=sid)
+                if sid in client_sessions:
+                    client_sessions[sid].discard(session_id)
+                break
+
+            # Read output based on session type
+            if session_type == 'meterpreter':
+                output = await msf_client.session_meterpreter_read(session_id)
+            else:
+                output = await msf_client.session_shell_read(session_id)
+
+            if output:
+                await sio.emit('session_output', {
+                    'session_id': session_id,
+                    'data': output,
+                    'type': session_type
+                }, to=sid)
+
+            await asyncio.sleep(0.15)
+        except Exception as e:
+            logger.error(f"Session output reader error: {e}")
+            await asyncio.sleep(1)

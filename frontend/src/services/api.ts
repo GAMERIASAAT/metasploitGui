@@ -109,6 +109,10 @@ class ApiClient {
     return (await this.client.get(`/modules/${type}/${name}/info`)).data
   }
 
+  async getCompatiblePayloads(type: string, name: string): Promise<{ payloads: string[]; count: number }> {
+    return (await this.client.get(`/modules/${type}/${name}/payloads`)).data
+  }
+
   async executeModule(
     type: string,
     name: string,
