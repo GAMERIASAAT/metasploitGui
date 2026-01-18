@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(curl:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc2ODY5MjAzOH0.znkIUUjO1lOUBpaSvS6K_P56AXhddGVo407d9Zq2Xk4\")",
+      "Bash(pkill:*)",
+      "WebFetch(domain:docs.rapid7.com)",
+      "Bash(msfvenom:*)"
+    ]
+  }
+}

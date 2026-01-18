@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #e6edf3;
+  background-color: #0d1117;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #161b22;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* XTerm styling */
+.xterm {
+  padding: 8px;
+}
+
+.xterm-viewport {
+  overflow-y: auto !important;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.3);
+}
+
+/* Status indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.active {
+  background-color: #238636;
+}
+
+.status-dot.warning {
+  background-color: #d29922;
+}
+
+.status-dot.error {
+  background-color: #f85149;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Session type badges */
+.badge {
+  @apply px-2 py-0.5 text-xs font-medium rounded-full;
+}
+
+.badge-meterpreter {
+  @apply bg-purple-500/20 text-purple-400;
+}
+
+.badge-shell {
+  @apply bg-blue-500/20 text-blue-400;
+}
+
+.badge-exploit {
+  @apply bg-red-500/20 text-red-400;
+}
+
+.badge-auxiliary {
+  @apply bg-yellow-500/20 text-yellow-400;
+}
+
+.badge-post {
+  @apply bg-green-500/20 text-green-400;
+}
+
+/* Table styling */
+.table-container {
+  @apply overflow-x-auto rounded-lg border border-msf-border;
+}
+
+.table-container table {
+  @apply w-full text-sm;
+}
+
+.table-container th {
+  @apply px-4 py-3 text-left font-medium text-gray-400 bg-msf-card border-b border-msf-border;
+}
+
+.table-container td {
+  @apply px-4 py-3 border-b border-msf-border;
+}
+
+.table-container tr:hover td {
+  @apply bg-msf-card/50;
+}
+
+/* Button styles */
+.btn {
+  @apply px-4 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-msf-dark;
+}
+
+.btn-primary {
+  @apply bg-msf-accent text-white hover:bg-msf-accent-hover focus:ring-msf-accent;
+}
+
+.btn-secondary {
+  @apply bg-msf-card text-white border border-msf-border hover:bg-msf-border focus:ring-msf-border;
+}
+
+.btn-danger {
+  @apply bg-msf-red/20 text-msf-red border border-msf-red/50 hover:bg-msf-red/30 focus:ring-msf-red;
+}
+
+/* Input styles */
+.input {
+  @apply w-full px-3 py-2 bg-msf-darker border border-msf-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-msf-blue focus:border-transparent;
+}
+
+/* Select styles */
+.select {
+  @apply w-full px-3 py-2 bg-msf-darker border border-msf-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-msf-blue focus:border-transparent;
+}
