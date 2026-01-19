@@ -10,9 +10,6 @@ interface ConsoleTab {
   id: string
   terminal: XTerminal
   fitAddon: FitAddon
-  inputBuffer: string
-  commandHistory: string[]
-  historyIndex: number
 }
 
 interface TerminalProps {
@@ -66,44 +63,143 @@ export default function Terminal({ visible = true }: TerminalProps) {
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(webLinksAddon)
 
-    // Create tab object with mutable state for input/history
-    const newTab: ConsoleTab = {
-      id: consoleId,
-      terminal,
-      fitAddon,
-      inputBuffer: '',
-      commandHistory: [],
-      historyIndex: -1,
+    // State for this console (stored outside React for closure access)
+    let inputBuffer = ''
+    let cursorPos = 0
+    const commandHistory: string[] = []
+    let historyIndex = -1
+
+    // Helper to redraw the current input line
+    const redrawInput = () => {
+      // Move to start of input, clear to end, write buffer, position cursor
+      terminal.write('\r\x1b[K') // Carriage return + clear line
+      terminal.write(inputBuffer)
+      // Move cursor to correct position
+      if (cursorPos < inputBuffer.length) {
+        terminal.write(`\x1b[${inputBuffer.length - cursorPos}D`)
+      }
     }
 
-    // Handle user input
+    // Handle arrow keys for history and cursor movement
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true
+
+      if (event.key === 'ArrowUp') {
+        // Previous command in history
+        if (commandHistory.length > 0) {
+          if (historyIndex === -1) {
+            historyIndex = commandHistory.length - 1
+          } else if (historyIndex > 0) {
+            historyIndex--
+          }
+          inputBuffer = commandHistory[historyIndex]
+          cursorPos = inputBuffer.length
+          redrawInput()
+        }
+        return false
+      }
+
+      if (event.key === 'ArrowDown') {
+        // Next command in history
+        if (historyIndex !== -1) {
+          if (historyIndex < commandHistory.length - 1) {
+            historyIndex++
+            inputBuffer = commandHistory[historyIndex]
+          } else {
+            historyIndex = -1
+            inputBuffer = ''
+          }
+          cursorPos = inputBuffer.length
+          redrawInput()
+        }
+        return false
+      }
+
+      if (event.key === 'ArrowLeft') {
+        // Move cursor left
+        if (cursorPos > 0) {
+          cursorPos--
+          terminal.write('\x1b[D')
+        }
+        return false
+      }
+
+      if (event.key === 'ArrowRight') {
+        // Move cursor right
+        if (cursorPos < inputBuffer.length) {
+          cursorPos++
+          terminal.write('\x1b[C')
+        }
+        return false
+      }
+
+      if (event.key === 'Home') {
+        // Move to start
+        if (cursorPos > 0) {
+          terminal.write(`\x1b[${cursorPos}D`)
+          cursorPos = 0
+        }
+        return false
+      }
+
+      if (event.key === 'End') {
+        // Move to end
+        if (cursorPos < inputBuffer.length) {
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos}C`)
+          cursorPos = inputBuffer.length
+        }
+        return false
+      }
+
+      return true // Let other keys through
+    })
+
+    // Handle character input
     terminal.onData((data) => {
       if (data === '\r') {
         // Enter pressed
-        const command = newTab.inputBuffer
-        if (command.trim()) {
-          newTab.commandHistory.push(command)
-          newTab.historyIndex = -1
+        if (inputBuffer.trim()) {
+          commandHistory.push(inputBuffer)
         }
-        socketService.sendConsoleInput(consoleId, command)
-        newTab.inputBuffer = ''
+        historyIndex = -1
+        socketService.sendConsoleInput(consoleId, inputBuffer)
+        inputBuffer = ''
+        cursorPos = 0
         terminal.write('\r\n')
-      } else if (data === '\x7f') {
+      } else if (data === '\x7f' || data === '\b') {
         // Backspace
-        if (newTab.inputBuffer.length > 0) {
-          newTab.inputBuffer = newTab.inputBuffer.slice(0, -1)
-          terminal.write('\b \b')
+        if (cursorPos > 0) {
+          inputBuffer = inputBuffer.slice(0, cursorPos - 1) + inputBuffer.slice(cursorPos)
+          cursorPos--
+          // Move back, delete char, redraw rest of line
+          terminal.write('\b')
+          terminal.write(inputBuffer.slice(cursorPos) + ' ')
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos + 1}D`)
         }
       } else if (data === '\x03') {
         // Ctrl+C
         socketService.sendConsoleInput(consoleId, '\x03')
-        newTab.inputBuffer = ''
+        inputBuffer = ''
+        cursorPos = 0
+        terminal.write('^C\r\n')
+      } else if (data === '\x7f') {
+        // Delete key (some terminals)
+        if (cursorPos < inputBuffer.length) {
+          inputBuffer = inputBuffer.slice(0, cursorPos) + inputBuffer.slice(cursorPos + 1)
+          terminal.write(inputBuffer.slice(cursorPos) + ' ')
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos + 1}D`)
+        }
       } else if (data.charCodeAt(0) >= 32 && !data.startsWith('\x1b')) {
-        // Regular printable character (not escape sequence)
-        newTab.inputBuffer += data
-        terminal.write(data)
+        // Regular printable characters
+        inputBuffer = inputBuffer.slice(0, cursorPos) + data + inputBuffer.slice(cursorPos)
+        cursorPos += data.length
+        // Write the new char and rest of line, then move cursor back
+        terminal.write(data + inputBuffer.slice(cursorPos))
+        if (cursorPos < inputBuffer.length) {
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos}D`)
+        }
       }
-      // Ignore escape sequences in onData - handled by keydown listener
+      // Ignore escape sequences (handled by attachCustomKeyEventHandler)
     })
 
     // Handle output from console
@@ -114,6 +210,7 @@ export default function Terminal({ visible = true }: TerminalProps) {
       }
     })
 
+    const newTab: ConsoleTab = { id: consoleId, terminal, fitAddon }
     // Store unsubscribe function for cleanup
     ;(newTab as any).unsubscribe = unsubscribe
 
@@ -137,76 +234,13 @@ export default function Terminal({ visible = true }: TerminalProps) {
     }
   }
 
-  // Mount active terminal and handle arrow keys
+  // Mount active terminal
   useEffect(() => {
     const activeTerminalTab = tabs.find((t) => t.id === activeTab)
     if (activeTerminalTab && terminalContainerRef.current) {
       terminalContainerRef.current.innerHTML = ''
       activeTerminalTab.terminal.open(terminalContainerRef.current)
       activeTerminalTab.fitAddon.fit()
-
-      // Handle arrow keys for command history
-      const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'ArrowUp') {
-          event.preventDefault()
-          event.stopPropagation()
-
-          const history = activeTerminalTab.commandHistory
-          if (history.length > 0) {
-            const currentIndex = activeTerminalTab.historyIndex
-            const newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1)
-            const command = history[newIndex]
-
-            // Clear current line and rewrite
-            const currentLen = activeTerminalTab.inputBuffer.length
-            activeTerminalTab.terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
-            activeTerminalTab.terminal.write(command)
-            activeTerminalTab.inputBuffer = command
-            activeTerminalTab.historyIndex = newIndex
-          }
-          return
-        }
-
-        if (event.key === 'ArrowDown') {
-          event.preventDefault()
-          event.stopPropagation()
-
-          const history = activeTerminalTab.commandHistory
-          const currentIndex = activeTerminalTab.historyIndex
-
-          // Clear current line first
-          const currentLen = activeTerminalTab.inputBuffer.length
-          activeTerminalTab.terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
-
-          if (currentIndex !== -1) {
-            const newIndex = currentIndex + 1
-            if (newIndex >= history.length) {
-              // Back to empty
-              activeTerminalTab.inputBuffer = ''
-              activeTerminalTab.historyIndex = -1
-            } else {
-              const command = history[newIndex]
-              activeTerminalTab.terminal.write(command)
-              activeTerminalTab.inputBuffer = command
-              activeTerminalTab.historyIndex = newIndex
-            }
-          }
-          return
-        }
-
-        // Block left/right arrows
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-      }
-
-      const container = terminalContainerRef.current
-      container.addEventListener('keydown', handleKeyDown, true)
-
-      return () => {
-        container.removeEventListener('keydown', handleKeyDown, true)
-      }
     }
   }, [activeTab, tabs])
 
@@ -228,7 +262,6 @@ export default function Terminal({ visible = true }: TerminalProps) {
     if (visible) {
       const activeTerminalTab = tabs.find((t) => t.id === activeTab)
       if (activeTerminalTab && terminalContainerRef.current) {
-        // Small delay to ensure DOM is ready
         setTimeout(() => {
           activeTerminalTab.fitAddon.fit()
         }, 50)
@@ -328,10 +361,10 @@ export default function Terminal({ visible = true }: TerminalProps) {
       {tabs.length > 0 && (
         <div className="bg-msf-darker border border-msf-border rounded-lg p-4">
           <p className="text-sm text-gray-400">
-            <strong className="text-white">Tips:</strong> Use standard msfconsole commands. Type{' '}
-            <code className="bg-msf-card px-1 rounded">help</code> to see available commands.
-            Press <code className="bg-msf-card px-1 rounded">Ctrl+C</code> to cancel current
-            operation.
+            <strong className="text-white">Tips:</strong> Use{' '}
+            <code className="bg-msf-card px-1 rounded">↑</code>/<code className="bg-msf-card px-1 rounded">↓</code> for command history,{' '}
+            <code className="bg-msf-card px-1 rounded">←</code>/<code className="bg-msf-card px-1 rounded">→</code> to edit.{' '}
+            Press <code className="bg-msf-card px-1 rounded">Ctrl+C</code> to cancel.
           </p>
         </div>
       )}

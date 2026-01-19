@@ -17,12 +17,7 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
-  const inputBufferRef = useRef('')
   const unsubscribeRef = useRef<(() => void) | null>(null)
-
-  // Use refs for command history to avoid closure issues
-  const commandHistoryRef = useRef<string[]>([])
-  const historyIndexRef = useRef(-1)
 
   const sessionType = session.type === 'meterpreter' ? 'meterpreter' : 'shell'
 
@@ -39,7 +34,6 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
   useEffect(() => {
     if (!terminalRef.current) return
 
-    // Create terminal
     const terminal = new XTerminal({
       theme: {
         background: '#0d1117',
@@ -93,6 +87,123 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     terminal.writeln('╚════════════════════════════════════════════════════════════╝\x1b[0m')
     terminal.writeln('')
 
+    // State for input handling (stored outside React for closure access)
+    let inputBuffer = ''
+    let cursorPos = 0
+    const commandHistory: string[] = []
+    let historyIndex = -1
+
+    // Helper to redraw the current input line
+    const redrawInput = () => {
+      terminal.write('\r\x1b[K')
+      terminal.write(inputBuffer)
+      if (cursorPos < inputBuffer.length) {
+        terminal.write(`\x1b[${inputBuffer.length - cursorPos}D`)
+      }
+    }
+
+    // Handle arrow keys for history and cursor movement
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true
+
+      if (event.key === 'ArrowUp') {
+        if (commandHistory.length > 0) {
+          if (historyIndex === -1) {
+            historyIndex = commandHistory.length - 1
+          } else if (historyIndex > 0) {
+            historyIndex--
+          }
+          inputBuffer = commandHistory[historyIndex]
+          cursorPos = inputBuffer.length
+          redrawInput()
+        }
+        return false
+      }
+
+      if (event.key === 'ArrowDown') {
+        if (historyIndex !== -1) {
+          if (historyIndex < commandHistory.length - 1) {
+            historyIndex++
+            inputBuffer = commandHistory[historyIndex]
+          } else {
+            historyIndex = -1
+            inputBuffer = ''
+          }
+          cursorPos = inputBuffer.length
+          redrawInput()
+        }
+        return false
+      }
+
+      if (event.key === 'ArrowLeft') {
+        if (cursorPos > 0) {
+          cursorPos--
+          terminal.write('\x1b[D')
+        }
+        return false
+      }
+
+      if (event.key === 'ArrowRight') {
+        if (cursorPos < inputBuffer.length) {
+          cursorPos++
+          terminal.write('\x1b[C')
+        }
+        return false
+      }
+
+      if (event.key === 'Home') {
+        if (cursorPos > 0) {
+          terminal.write(`\x1b[${cursorPos}D`)
+          cursorPos = 0
+        }
+        return false
+      }
+
+      if (event.key === 'End') {
+        if (cursorPos < inputBuffer.length) {
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos}C`)
+          cursorPos = inputBuffer.length
+        }
+        return false
+      }
+
+      return true
+    })
+
+    // Handle character input
+    terminal.onData((data) => {
+      if (data === '\r') {
+        if (inputBuffer.trim()) {
+          commandHistory.push(inputBuffer)
+        }
+        historyIndex = -1
+        socketService.sendSessionInput(session.id, inputBuffer, sessionType)
+        inputBuffer = ''
+        cursorPos = 0
+        terminal.write('\r\n')
+      } else if (data === '\x7f' || data === '\b') {
+        if (cursorPos > 0) {
+          inputBuffer = inputBuffer.slice(0, cursorPos - 1) + inputBuffer.slice(cursorPos)
+          cursorPos--
+          terminal.write('\b')
+          terminal.write(inputBuffer.slice(cursorPos) + ' ')
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos + 1}D`)
+        }
+      } else if (data === '\x03') {
+        socketService.sendSessionInput(session.id, '\x03', sessionType)
+        inputBuffer = ''
+        cursorPos = 0
+        terminal.write('^C\r\n')
+      } else if (data.charCodeAt(0) >= 32 && !data.startsWith('\x1b')) {
+        inputBuffer = inputBuffer.slice(0, cursorPos) + data + inputBuffer.slice(cursorPos)
+        cursorPos += data.length
+        terminal.write(data + inputBuffer.slice(cursorPos))
+        if (cursorPos < inputBuffer.length) {
+          terminal.write(`\x1b[${inputBuffer.length - cursorPos}D`)
+        }
+      }
+    })
+
     // Subscribe to session output
     const unsubscribe = socketService.subscribeSessionOutput(
       session.id,
@@ -101,7 +212,6 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
         if (data.closed) {
           terminal.writeln('\r\n\x1b[31m[Session closed]\x1b[0m')
         } else if (data.data) {
-          // Normalize line endings
           const normalizedData = data.data.replace(/\r?\n/g, '\r\n')
           terminal.write(normalizedData)
         }
@@ -109,99 +219,7 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     )
     unsubscribeRef.current = unsubscribe
 
-    // Handle arrow keys via DOM event listener (more reliable than xterm's handler)
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        event.stopPropagation()
-
-        const history = commandHistoryRef.current
-        if (history.length > 0) {
-          const currentIndex = historyIndexRef.current
-          const newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1)
-          const command = history[newIndex]
-
-          // Clear current line and rewrite
-          const currentLen = inputBufferRef.current.length
-          terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
-          terminal.write(command)
-          inputBufferRef.current = command
-          historyIndexRef.current = newIndex
-        }
-        return
-      }
-
-      if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        event.stopPropagation()
-
-        const history = commandHistoryRef.current
-        const currentIndex = historyIndexRef.current
-
-        // Clear current line first
-        const currentLen = inputBufferRef.current.length
-        terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
-
-        if (currentIndex !== -1) {
-          const newIndex = currentIndex + 1
-          if (newIndex >= history.length) {
-            // Back to empty
-            inputBufferRef.current = ''
-            historyIndexRef.current = -1
-          } else {
-            const command = history[newIndex]
-            terminal.write(command)
-            inputBufferRef.current = command
-            historyIndexRef.current = newIndex
-          }
-        }
-        return
-      }
-
-      // Block left/right arrows
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        event.preventDefault()
-        event.stopPropagation()
-      }
-    }
-
-    // Attach to the terminal container element
-    const terminalElement = terminalRef.current
-    terminalElement?.addEventListener('keydown', handleKeyDown, true)
-
-    // Handle input - using refs to avoid closure issues
-    const handleInput = (data: string) => {
-      if (data === '\r') {
-        // Enter pressed - send command
-        const command = inputBufferRef.current
-        if (command.trim()) {
-          commandHistoryRef.current = [...commandHistoryRef.current, command]
-          historyIndexRef.current = -1
-        }
-        socketService.sendSessionInput(session.id, command, sessionType)
-        inputBufferRef.current = ''
-        terminal.write('\r\n')
-      } else if (data === '\x7f') {
-        // Backspace
-        if (inputBufferRef.current.length > 0) {
-          inputBufferRef.current = inputBufferRef.current.slice(0, -1)
-          terminal.write('\b \b')
-        }
-      } else if (data === '\x03') {
-        // Ctrl+C
-        socketService.sendSessionInput(session.id, '\x03', sessionType)
-        inputBufferRef.current = ''
-      } else if (data.charCodeAt(0) >= 32 && !data.startsWith('\x1b')) {
-        // Regular character (not escape sequence)
-        inputBufferRef.current += data
-        terminal.write(data)
-      }
-    }
-
-    terminal.onData(handleInput)
-
     return () => {
-      terminalElement?.removeEventListener('keydown', handleKeyDown, true)
       unsubscribe()
       terminal.dispose()
     }
@@ -216,7 +234,6 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     }
 
     window.addEventListener('resize', handleResize)
-    // Also fit when fullscreen changes
     setTimeout(handleResize, 100)
 
     return () => window.removeEventListener('resize', handleResize)
@@ -291,8 +308,9 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
       {/* Footer */}
       <div className="px-4 py-2 bg-msf-darker border-t border-msf-border">
         <p className="text-xs text-gray-500">
-          Use <kbd className="px-1 bg-msf-card rounded">↑</kbd>/<kbd className="px-1 bg-msf-card rounded">↓</kbd> for command history |{' '}
-          <kbd className="px-1 bg-msf-card rounded">Ctrl+C</kbd> to cancel
+          <kbd className="px-1 bg-msf-card rounded">↑</kbd>/<kbd className="px-1 bg-msf-card rounded">↓</kbd> history |{' '}
+          <kbd className="px-1 bg-msf-card rounded">←</kbd>/<kbd className="px-1 bg-msf-card rounded">→</kbd> edit |{' '}
+          <kbd className="px-1 bg-msf-card rounded">Ctrl+C</kbd> cancel
         </p>
       </div>
     </div>
