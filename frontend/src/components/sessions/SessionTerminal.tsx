@@ -109,6 +109,62 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     )
     unsubscribeRef.current = unsubscribe
 
+    // Intercept arrow keys before xterm processes them
+    terminal.attachCustomKeyEventHandler((event) => {
+      // Handle Up/Down arrows for command history
+      if (event.type === 'keydown') {
+        if (event.key === 'ArrowUp') {
+          const history = commandHistoryRef.current
+          if (history.length > 0) {
+            const currentIndex = historyIndexRef.current
+            const newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1)
+            const command = history[newIndex]
+
+            // Clear current line and rewrite
+            const currentLen = inputBufferRef.current.length
+            terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
+            terminal.write(command)
+            inputBufferRef.current = command
+            historyIndexRef.current = newIndex
+          }
+          return false // Prevent default xterm handling
+        }
+
+        if (event.key === 'ArrowDown') {
+          const history = commandHistoryRef.current
+          const currentIndex = historyIndexRef.current
+
+          // Clear current line first
+          const currentLen = inputBufferRef.current.length
+          terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
+
+          if (currentIndex === -1) {
+            // Already at end, do nothing
+          } else {
+            const newIndex = currentIndex + 1
+            if (newIndex >= history.length) {
+              // Back to empty
+              inputBufferRef.current = ''
+              historyIndexRef.current = -1
+            } else {
+              const command = history[newIndex]
+              terminal.write(command)
+              inputBufferRef.current = command
+              historyIndexRef.current = newIndex
+            }
+          }
+          return false // Prevent default xterm handling
+        }
+
+        // Block left/right arrows for now (line editing not implemented)
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          return false
+        }
+      }
+
+      return true // Allow other keys
+    })
+
     // Handle input - using refs to avoid closure issues
     const handleInput = (data: string) => {
       if (data === '\r') {
@@ -131,47 +187,6 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
         // Ctrl+C
         socketService.sendSessionInput(session.id, '\x03', sessionType)
         inputBufferRef.current = ''
-      } else if (data === '\x1b[A') {
-        // Up arrow - previous command
-        const history = commandHistoryRef.current
-        if (history.length > 0) {
-          const currentIndex = historyIndexRef.current
-          const newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1)
-          const command = history[newIndex]
-
-          // Clear current line and rewrite
-          const currentLen = inputBufferRef.current.length
-          terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
-          terminal.write(command)
-          inputBufferRef.current = command
-          historyIndexRef.current = newIndex
-        }
-      } else if (data === '\x1b[B') {
-        // Down arrow - next command
-        const history = commandHistoryRef.current
-        const currentIndex = historyIndexRef.current
-
-        if (currentIndex !== -1) {
-          const newIndex = currentIndex + 1
-          // Clear current line first
-          const currentLen = inputBufferRef.current.length
-          terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
-
-          if (newIndex >= history.length) {
-            // Back to empty
-            inputBufferRef.current = ''
-            historyIndexRef.current = -1
-          } else {
-            const command = history[newIndex]
-            terminal.write(command)
-            inputBufferRef.current = command
-            historyIndexRef.current = newIndex
-          }
-        }
-      } else if (data === '\x1b[C') {
-        // Right arrow - ignore for now
-      } else if (data === '\x1b[D') {
-        // Left arrow - ignore for now
       } else if (data.charCodeAt(0) >= 32 && !data.startsWith('\x1b')) {
         // Regular character (not escape sequence)
         inputBufferRef.current += data
