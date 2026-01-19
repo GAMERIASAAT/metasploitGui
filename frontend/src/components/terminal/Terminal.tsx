@@ -81,6 +81,10 @@ export default function Terminal({ visible = true }: TerminalProps) {
         // Ctrl+C
         socketService.sendConsoleInput(consoleId, '\x03')
         inputBuffer = ''
+      } else if (data.startsWith('\x1b[') || data.startsWith('\x1bO')) {
+        // Arrow keys and other escape sequences - send directly to msfconsole
+        // Don't buffer these, let msfconsole handle them (for history, tab completion, etc.)
+        socketService.sendConsoleInput(consoleId, data)
       } else {
         inputBuffer += data
         terminal.write(data)
