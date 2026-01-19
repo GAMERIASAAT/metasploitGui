@@ -12,7 +12,11 @@ interface ConsoleTab {
   fitAddon: FitAddon
 }
 
-export default function Terminal() {
+interface TerminalProps {
+  visible?: boolean
+}
+
+export default function Terminal({ visible = true }: TerminalProps) {
   const [tabs, setTabs] = useState<ConsoleTab[]>([])
   const [activeTab, setActiveTab] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -140,19 +144,24 @@ export default function Terminal() {
     return () => window.removeEventListener('resize', handleResize)
   }, [activeTab, tabs])
 
-  // Cleanup on unmount
+  // Re-fit terminal when becoming visible
   useEffect(() => {
-    return () => {
-      tabs.forEach((tab) => {
-        ;(tab as any).unsubscribe?.()
-        tab.terminal.dispose()
-        socketService.destroyConsole(tab.id)
-      })
+    if (visible) {
+      const activeTerminalTab = tabs.find((t) => t.id === activeTab)
+      if (activeTerminalTab && terminalContainerRef.current) {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          activeTerminalTab.fitAddon.fit()
+        }, 50)
+      }
     }
-  }, [])
+  }, [visible, activeTab, tabs])
 
   return (
-    <div className={`space-y-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-msf-dark p-4' : ''}`}>
+    <div
+      className={`space-y-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-msf-dark p-4' : ''}`}
+      style={{ display: visible ? 'block' : 'none' }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

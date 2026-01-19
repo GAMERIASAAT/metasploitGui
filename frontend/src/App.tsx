@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import { useTerminalStore } from './store/terminalStore'
 import { socketService } from './services/socket'
@@ -26,6 +26,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   const { isAuthenticated, checkAuth } = useAuthStore()
   const { activeSessionTerminal, closeSessionTerminal } = useTerminalStore()
+  const location = useLocation()
 
   useEffect(() => {
     checkAuth()
@@ -40,6 +41,8 @@ function App() {
       socketService.disconnect()
     }
   }, [isAuthenticated])
+
+  const isTerminalRoute = location.pathname === '/terminal'
 
   return (
     <>
@@ -56,8 +59,11 @@ function App() {
                   <Route path="/modules" element={<Modules />} />
                   <Route path="/listeners" element={<Listeners />} />
                   <Route path="/payloads" element={<Payloads />} />
-                  <Route path="/terminal" element={<Terminal />} />
+                  {/* Terminal placeholder - actual Terminal rendered below for persistence */}
+                  <Route path="/terminal" element={null} />
                 </Routes>
+                {/* Persistent Terminal - always mounted, visibility controlled by route */}
+                {isAuthenticated && <Terminal visible={isTerminalRoute} />}
               </Layout>
             </ProtectedRoute>
           }
