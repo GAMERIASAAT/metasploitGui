@@ -10,6 +10,9 @@ interface ConsoleTab {
   id: string
   terminal: XTerminal
   fitAddon: FitAddon
+  inputBuffer: string
+  commandHistory: string[]
+  historyIndex: number
 }
 
 interface TerminalProps {
@@ -54,7 +57,7 @@ export default function Terminal({ visible = true }: TerminalProps) {
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
-      convertEol: true,  // Convert LF to CRLF for proper line handling
+      convertEol: true,
     })
 
     const fitAddon = new FitAddon()
@@ -63,50 +66,59 @@ export default function Terminal({ visible = true }: TerminalProps) {
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(webLinksAddon)
 
+    // Create tab object with mutable state for input/history
+    const newTab: ConsoleTab = {
+      id: consoleId,
+      terminal,
+      fitAddon,
+      inputBuffer: '',
+      commandHistory: [],
+      historyIndex: -1,
+    }
+
     // Handle user input
-    let inputBuffer = ''
     terminal.onData((data) => {
       if (data === '\r') {
         // Enter pressed
-        socketService.sendConsoleInput(consoleId, inputBuffer)
-        inputBuffer = ''
+        const command = newTab.inputBuffer
+        if (command.trim()) {
+          newTab.commandHistory.push(command)
+          newTab.historyIndex = -1
+        }
+        socketService.sendConsoleInput(consoleId, command)
+        newTab.inputBuffer = ''
         terminal.write('\r\n')
       } else if (data === '\x7f') {
         // Backspace
-        if (inputBuffer.length > 0) {
-          inputBuffer = inputBuffer.slice(0, -1)
+        if (newTab.inputBuffer.length > 0) {
+          newTab.inputBuffer = newTab.inputBuffer.slice(0, -1)
           terminal.write('\b \b')
         }
       } else if (data === '\x03') {
         // Ctrl+C
         socketService.sendConsoleInput(consoleId, '\x03')
-        inputBuffer = ''
-      } else if (data.startsWith('\x1b[') || data.startsWith('\x1bO')) {
-        // Arrow keys and other escape sequences - send directly to msfconsole
-        // Don't buffer these, let msfconsole handle them (for history, tab completion, etc.)
-        socketService.sendConsoleInput(consoleId, data)
-      } else {
-        inputBuffer += data
+        newTab.inputBuffer = ''
+      } else if (data.charCodeAt(0) >= 32 && !data.startsWith('\x1b')) {
+        // Regular printable character (not escape sequence)
+        newTab.inputBuffer += data
         terminal.write(data)
       }
+      // Ignore escape sequences in onData - handled by keydown listener
     })
 
     // Handle output from console
     const unsubscribe = socketService.onConsoleOutput(consoleId, (output) => {
       if (output.data) {
-        // Normalize line endings: replace standalone \n with \r\n
-        // but avoid replacing \r\n that already exists
         const normalizedData = output.data.replace(/\r?\n/g, '\r\n')
         terminal.write(normalizedData)
       }
     })
 
-    const newTab: ConsoleTab = { id: consoleId, terminal, fitAddon }
-    setTabs((prev) => [...prev, newTab])
-    setActiveTab(consoleId)
-
     // Store unsubscribe function for cleanup
     ;(newTab as any).unsubscribe = unsubscribe
+
+    setTabs((prev) => [...prev, newTab])
+    setActiveTab(consoleId)
   }
 
   const closeConsole = (consoleId: string) => {
@@ -125,13 +137,76 @@ export default function Terminal({ visible = true }: TerminalProps) {
     }
   }
 
-  // Mount active terminal
+  // Mount active terminal and handle arrow keys
   useEffect(() => {
     const activeTerminalTab = tabs.find((t) => t.id === activeTab)
     if (activeTerminalTab && terminalContainerRef.current) {
       terminalContainerRef.current.innerHTML = ''
       activeTerminalTab.terminal.open(terminalContainerRef.current)
       activeTerminalTab.fitAddon.fit()
+
+      // Handle arrow keys for command history
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          event.stopPropagation()
+
+          const history = activeTerminalTab.commandHistory
+          if (history.length > 0) {
+            const currentIndex = activeTerminalTab.historyIndex
+            const newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1)
+            const command = history[newIndex]
+
+            // Clear current line and rewrite
+            const currentLen = activeTerminalTab.inputBuffer.length
+            activeTerminalTab.terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
+            activeTerminalTab.terminal.write(command)
+            activeTerminalTab.inputBuffer = command
+            activeTerminalTab.historyIndex = newIndex
+          }
+          return
+        }
+
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          event.stopPropagation()
+
+          const history = activeTerminalTab.commandHistory
+          const currentIndex = activeTerminalTab.historyIndex
+
+          // Clear current line first
+          const currentLen = activeTerminalTab.inputBuffer.length
+          activeTerminalTab.terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
+
+          if (currentIndex !== -1) {
+            const newIndex = currentIndex + 1
+            if (newIndex >= history.length) {
+              // Back to empty
+              activeTerminalTab.inputBuffer = ''
+              activeTerminalTab.historyIndex = -1
+            } else {
+              const command = history[newIndex]
+              activeTerminalTab.terminal.write(command)
+              activeTerminalTab.inputBuffer = command
+              activeTerminalTab.historyIndex = newIndex
+            }
+          }
+          return
+        }
+
+        // Block left/right arrows
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+      }
+
+      const container = terminalContainerRef.current
+      container.addEventListener('keydown', handleKeyDown, true)
+
+      return () => {
+        container.removeEventListener('keydown', handleKeyDown, true)
+      }
     }
   }, [activeTab, tabs])
 
