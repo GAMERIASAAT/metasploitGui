@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal as XTerminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
@@ -14,13 +14,15 @@ interface SessionTerminalProps {
 
 export default function SessionTerminal({ session, onClose }: SessionTerminalProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [commandHistory, setCommandHistory] = useState<string[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const inputBufferRef = useRef('')
   const unsubscribeRef = useRef<(() => void) | null>(null)
+
+  // Use refs for command history to avoid closure issues
+  const commandHistoryRef = useRef<string[]>([])
+  const historyIndexRef = useRef(-1)
 
   const sessionType = session.type === 'meterpreter' ? 'meterpreter' : 'shell'
 
@@ -33,68 +35,6 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     }
     return <Globe className="w-4 h-4" />
   }
-
-  const handleInput = useCallback((data: string) => {
-    const terminal = xtermRef.current
-    if (!terminal) return
-
-    if (data === '\r') {
-      // Enter pressed - send command
-      const command = inputBufferRef.current
-      if (command.trim()) {
-        setCommandHistory((prev) => [...prev, command])
-        setHistoryIndex(-1)
-      }
-      socketService.sendSessionInput(session.id, command, sessionType)
-      inputBufferRef.current = ''
-      terminal.write('\r\n')
-    } else if (data === '\x7f') {
-      // Backspace
-      if (inputBufferRef.current.length > 0) {
-        inputBufferRef.current = inputBufferRef.current.slice(0, -1)
-        terminal.write('\b \b')
-      }
-    } else if (data === '\x03') {
-      // Ctrl+C
-      socketService.sendSessionInput(session.id, '\x03', sessionType)
-      inputBufferRef.current = ''
-    } else if (data === '\x1b[A') {
-      // Up arrow - previous command
-      if (commandHistory.length > 0) {
-        const newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1)
-        const command = commandHistory[newIndex]
-        // Clear current input
-        terminal.write('\r\x1b[K')
-        terminal.write(sessionType === 'meterpreter' ? 'meterpreter > ' : '$ ')
-        terminal.write(command)
-        inputBufferRef.current = command
-        setHistoryIndex(newIndex)
-      }
-    } else if (data === '\x1b[B') {
-      // Down arrow - next command
-      if (historyIndex !== -1) {
-        const newIndex = historyIndex + 1
-        if (newIndex >= commandHistory.length) {
-          // Clear to empty
-          terminal.write('\r\x1b[K')
-          terminal.write(sessionType === 'meterpreter' ? 'meterpreter > ' : '$ ')
-          inputBufferRef.current = ''
-          setHistoryIndex(-1)
-        } else {
-          const command = commandHistory[newIndex]
-          terminal.write('\r\x1b[K')
-          terminal.write(sessionType === 'meterpreter' ? 'meterpreter > ' : '$ ')
-          terminal.write(command)
-          inputBufferRef.current = command
-          setHistoryIndex(newIndex)
-        }
-      }
-    } else if (data.charCodeAt(0) >= 32) {
-      // Regular character
-      inputBufferRef.current += data
-      terminal.write(data)
-    }
-  }, [session.id, sessionType, commandHistory, historyIndex])
 
   useEffect(() => {
     if (!terminalRef.current) return
@@ -169,14 +109,83 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     )
     unsubscribeRef.current = unsubscribe
 
-    // Handle input
+    // Handle input - using refs to avoid closure issues
+    const handleInput = (data: string) => {
+      if (data === '\r') {
+        // Enter pressed - send command
+        const command = inputBufferRef.current
+        if (command.trim()) {
+          commandHistoryRef.current = [...commandHistoryRef.current, command]
+          historyIndexRef.current = -1
+        }
+        socketService.sendSessionInput(session.id, command, sessionType)
+        inputBufferRef.current = ''
+        terminal.write('\r\n')
+      } else if (data === '\x7f') {
+        // Backspace
+        if (inputBufferRef.current.length > 0) {
+          inputBufferRef.current = inputBufferRef.current.slice(0, -1)
+          terminal.write('\b \b')
+        }
+      } else if (data === '\x03') {
+        // Ctrl+C
+        socketService.sendSessionInput(session.id, '\x03', sessionType)
+        inputBufferRef.current = ''
+      } else if (data === '\x1b[A') {
+        // Up arrow - previous command
+        const history = commandHistoryRef.current
+        if (history.length > 0) {
+          const currentIndex = historyIndexRef.current
+          const newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1)
+          const command = history[newIndex]
+
+          // Clear current line and rewrite
+          const currentLen = inputBufferRef.current.length
+          terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
+          terminal.write(command)
+          inputBufferRef.current = command
+          historyIndexRef.current = newIndex
+        }
+      } else if (data === '\x1b[B') {
+        // Down arrow - next command
+        const history = commandHistoryRef.current
+        const currentIndex = historyIndexRef.current
+
+        if (currentIndex !== -1) {
+          const newIndex = currentIndex + 1
+          // Clear current line first
+          const currentLen = inputBufferRef.current.length
+          terminal.write('\b'.repeat(currentLen) + ' '.repeat(currentLen) + '\b'.repeat(currentLen))
+
+          if (newIndex >= history.length) {
+            // Back to empty
+            inputBufferRef.current = ''
+            historyIndexRef.current = -1
+          } else {
+            const command = history[newIndex]
+            terminal.write(command)
+            inputBufferRef.current = command
+            historyIndexRef.current = newIndex
+          }
+        }
+      } else if (data === '\x1b[C') {
+        // Right arrow - ignore for now
+      } else if (data === '\x1b[D') {
+        // Left arrow - ignore for now
+      } else if (data.charCodeAt(0) >= 32 && !data.startsWith('\x1b')) {
+        // Regular character (not escape sequence)
+        inputBufferRef.current += data
+        terminal.write(data)
+      }
+    }
+
     terminal.onData(handleInput)
 
     return () => {
       unsubscribe()
       terminal.dispose()
     }
-  }, [session, sessionType, handleInput])
+  }, [session, sessionType])
 
   // Handle resize
   useEffect(() => {

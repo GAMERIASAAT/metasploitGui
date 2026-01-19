@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
+import { useTerminalStore } from '../../store/terminalStore'
 import { socketService } from '../../services/socket'
 import { Session } from '../../types'
-import SessionTerminal from './SessionTerminal'
 import {
   Users,
   Terminal,
@@ -18,10 +18,10 @@ import {
 export default function Sessions() {
   const { sessions, fetchSessions, killSession, updateSessions } =
     useSessionStore()
+  const { openSessionTerminal } = useTerminalStore()
   const [expandedSession, setExpandedSession] = useState<number | null>(null)
   const [sessionOutput, setSessionOutput] = useState<Record<number, string>>({})
   const [commandInput, setCommandInput] = useState('')
-  const [terminalSession, setTerminalSession] = useState<Session | null>(null)
 
   useEffect(() => {
     fetchSessions()
@@ -128,7 +128,7 @@ export default function Sessions() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setTerminalSession(session)
+                      openSessionTerminal(session)
                     }}
                     className="p-2 text-gray-400 hover:text-msf-blue transition-colors"
                     title="Open Terminal"
@@ -223,14 +223,6 @@ export default function Sessions() {
             </div>
           ))}
         </div>
-      )}
-
-      {/* Session Terminal */}
-      {terminalSession && (
-        <SessionTerminal
-          session={terminalSession}
-          onClose={() => setTerminalSession(null)}
-        />
       )}
     </div>
   )

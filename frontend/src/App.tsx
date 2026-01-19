@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
+import { useTerminalStore } from './store/terminalStore'
 import { socketService } from './services/socket'
 import Layout from './components/common/Layout'
 import Login from './components/common/Login'
@@ -10,6 +11,7 @@ import Modules from './components/modules/Modules'
 import Listeners from './components/listeners/Listeners'
 import Payloads from './components/payloads/Payloads'
 import Terminal from './components/terminal/Terminal'
+import SessionTerminal from './components/sessions/SessionTerminal'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -23,6 +25,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { isAuthenticated, checkAuth } = useAuthStore()
+  const { activeSessionTerminal, closeSessionTerminal } = useTerminalStore()
 
   useEffect(() => {
     checkAuth()
@@ -39,26 +42,36 @@ function App() {
   }, [isAuthenticated])
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/sessions" element={<Sessions />} />
-                <Route path="/modules" element={<Modules />} />
-                <Route path="/listeners" element={<Listeners />} />
-                <Route path="/payloads" element={<Payloads />} />
-                <Route path="/terminal" element={<Terminal />} />
-              </Routes>
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/sessions" element={<Sessions />} />
+                  <Route path="/modules" element={<Modules />} />
+                  <Route path="/listeners" element={<Listeners />} />
+                  <Route path="/payloads" element={<Payloads />} />
+                  <Route path="/terminal" element={<Terminal />} />
+                </Routes>
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+
+      {/* Global Session Terminal - persists across page navigation */}
+      {activeSessionTerminal && (
+        <SessionTerminal
+          session={activeSessionTerminal}
+          onClose={closeSessionTerminal}
+        />
+      )}
+    </>
   )
 }
 
