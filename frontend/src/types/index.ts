@@ -54,29 +54,52 @@ export interface Console {
 
 export interface Target {
   id: string
-  host: string
-  mac?: string
-  name?: string
-  os_name?: string
-  os_flavor?: string
-  os_sp?: string
-  os_lang?: string
+  ip: string
+  hostname?: string
+  os?: string
+  os_family?: string
   arch?: string
-  purpose?: string
-  info?: string
-  comments?: string
-  services?: Service[]
-  vulns?: Vulnerability[]
+  status: 'unknown' | 'online' | 'offline' | 'compromised'
+  tags: string[]
+  notes?: string
+  group?: string
+  created_at: string
+  updated_at: string
+  services: Service[]
+  session_count: number
+}
+
+export interface TargetCreate {
+  ip: string
+  hostname?: string
+  os?: string
+  os_family?: string
+  arch?: string
+  status?: string
+  tags?: string[]
+  notes?: string
+  group?: string
 }
 
 export interface Service {
   id: string
-  host: string
+  host_id: string
   port: number
-  proto: string
-  name?: string
-  state: string
-  info?: string
+  protocol: 'tcp' | 'udp'
+  service: string
+  version?: string
+  banner?: string
+  state: 'open' | 'filtered' | 'closed'
+  created_at: string
+}
+
+export interface ServiceCreate {
+  port: number
+  protocol?: string
+  service?: string
+  version?: string
+  banner?: string
+  state?: string
 }
 
 export interface Vulnerability {

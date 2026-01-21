@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Shield,
+  Monitor,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -19,6 +20,7 @@ interface LayoutProps {
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/targets', label: 'Targets', icon: Monitor },
   { path: '/sessions', label: 'Sessions', icon: Users },
   { path: '/modules', label: 'Modules', icon: Box },
   { path: '/listeners', label: 'Listeners', icon: Radio },

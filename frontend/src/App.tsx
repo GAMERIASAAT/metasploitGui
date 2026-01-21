@@ -10,6 +10,7 @@ import Sessions from './components/sessions/Sessions'
 import Modules from './components/modules/Modules'
 import Listeners from './components/listeners/Listeners'
 import Payloads from './components/payloads/Payloads'
+import Targets from './components/targets/Targets'
 import Terminal from './components/terminal/Terminal'
 import SessionTerminal from './components/sessions/SessionTerminal'
 
@@ -59,6 +60,7 @@ function App() {
                   <Route path="/modules" element={<Modules />} />
                   <Route path="/listeners" element={<Listeners />} />
                   <Route path="/payloads" element={<Payloads />} />
+                  <Route path="/targets" element={<Targets />} />
                   {/* Terminal placeholder - actual Terminal rendered below for persistence */}
                   <Route path="/terminal" element={null} />
                 </Routes>

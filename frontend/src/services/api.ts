@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate } from '../types'
+import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -254,6 +254,72 @@ class ApiClient {
   // Health
   async getHealth() {
     return (await axios.get('/health')).data
+  }
+
+  // Targets
+  async getTargets(filters?: { status?: string; group?: string; tag?: string }): Promise<{
+    targets: Target[]
+    count: number
+    groups: string[]
+    tags: string[]
+  }> {
+    const params = new URLSearchParams()
+    if (filters?.status) params.append('status', filters.status)
+    if (filters?.group) params.append('group', filters.group)
+    if (filters?.tag) params.append('tag', filters.tag)
+    const query = params.toString() ? `?${params}` : ''
+    return (await this.client.get(`/targets${query}`)).data
+  }
+
+  async getTarget(id: string): Promise<Target> {
+    return (await this.client.get(`/targets/${id}`)).data
+  }
+
+  async createTarget(target: TargetCreate): Promise<Target> {
+    return (await this.client.post('/targets', target)).data
+  }
+
+  async updateTarget(id: string, update: Partial<TargetCreate>): Promise<Target> {
+    return (await this.client.put(`/targets/${id}`, update)).data
+  }
+
+  async deleteTarget(id: string): Promise<void> {
+    await this.client.delete(`/targets/${id}`)
+  }
+
+  async importTargets(targets: TargetCreate[]): Promise<{ imported: number; skipped: number }> {
+    return (await this.client.post('/targets/import', { targets })).data
+  }
+
+  async bulkUpdateTargetStatus(targetIds: string[], status: string): Promise<{ updated: number }> {
+    return (await this.client.post('/targets/bulk/status', { target_ids: targetIds, status })).data
+  }
+
+  async bulkDeleteTargets(targetIds: string[]): Promise<{ deleted: number }> {
+    return (await this.client.delete('/targets/bulk', { data: { target_ids: targetIds } })).data
+  }
+
+  async getTargetStats(): Promise<{
+    total: number
+    by_status: Record<string, number>
+    by_os: Record<string, number>
+    by_group: Record<string, number>
+    total_services: number
+  }> {
+    return (await this.client.get('/targets/stats/summary')).data
+  }
+
+  // Target Services
+  async addService(targetId: string, service: ServiceCreate): Promise<Service> {
+    return (await this.client.post(`/targets/${targetId}/services`, service)).data
+  }
+
+  async getServices(targetId: string): Promise<{ services: Service[]; count: number }> {
+    return (await this.client.get(`/targets/${targetId}/services`)).data
+  }
+
+  async deleteService(targetId: string, serviceId: string): Promise<void> {
+    await this.client.delete(`/targets/${targetId}/services/${serviceId}`)
   }
 }
 
