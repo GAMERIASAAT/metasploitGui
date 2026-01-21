@@ -13,55 +13,164 @@ A cross-platform GUI (Browser + Android) for Metasploit Framework combining feat
 
 ---
 
-## Completed Features (Phase 1 + Partial Phase 2)
+## Current Status Summary
 
-### Backend (`/backend`)
-- **FastAPI server** with JWT authentication
-- **MSF RPC connection** via pymetasploit3 with direct API calls
-- **WebSocket support** for real-time console output
-- **Endpoints implemented**:
-  - `/api/v1/auth/*` - Login, token management
-  - `/api/v1/sessions/*` - Session list, kill, shell/meterpreter interaction
-  - `/api/v1/modules/*` - Module search, info, execute, stats
-  - `/api/v1/console/*` - Console create, read, write, destroy
-  - `/api/v1/listeners/*` - Handler creation, job management
-  - `/api/v1/payloads/*` - Generate, host, templates, encoders
+| Phase | Status | Progress |
+|-------|--------|----------|
+| Phase 1: Foundation | ✅ Complete | 100% |
+| Phase 2: Core MSF Integration | ✅ Complete | 100% |
+| Phase 3: Target & Network | 🔲 Not Started | 0% |
+| Phase 4: Post-Exploitation | 🔲 Not Started | 0% |
+| Phase 5: Advanced Features | 🔲 Not Started | 0% |
 
-### Frontend (`/frontend`)
-- **Dashboard** - Overview with module stats, session count
-- **Sessions page** - List and manage active sessions
-- **Modules page** - Browse and search modules by type
-- **Listeners page** - Create handlers with common payload templates
-- **Terminal page** - Interactive msfconsole with xterm.js (tab support)
-- **Payloads page** - Full payload generator with:
-  - 22 payload templates (Windows, Linux, Android, macOS, Multi-platform)
-  - Dynamic options fetching based on selected payload
-  - Advanced options toggle
-  - Platform filtering
-  - Encoder selection with iterations and bad chars
-  - Payload hosting with custom URL paths
+---
 
-### Key Files Modified/Created
+## Completed Features
 
-#### Backend
-- `backend/main.py` - FastAPI app with `/dl/*` route for hosted payloads
-- `backend/app/core/msf_client.py` - MSF RPC wrapper with direct API calls
-- `backend/app/api/routes/payloads.py` - Payload generation and hosting
-- `backend/app/api/routes/modules.py` - Module browsing and execution
-- `backend/app/api/routes/listeners.py` - Handler management
-- `backend/app/api/routes/console.py` - Console management
-- `backend/app/api/routes/sessions.py` - Session management
-- `backend/app/api/websocket.py` - Socket.IO for real-time updates
+### Phase 1: Foundation ✅
+- [x] Project structure setup (React + FastAPI)
+- [x] JWT authentication system
+- [x] MSF RPC connection via pymetasploit3
+- [x] Basic UI layout with Tailwind CSS
+- [x] Socket.IO real-time communication
 
-#### Frontend
-- `frontend/src/components/payloads/Payloads.tsx` - Payload generator UI
-- `frontend/src/components/terminal/Terminal.tsx` - Interactive terminal
-- `frontend/src/components/listeners/Listeners.tsx` - Listener management
-- `frontend/src/components/modules/Modules.tsx` - Module browser
-- `frontend/src/components/sessions/Sessions.tsx` - Session list
-- `frontend/src/services/api.ts` - API client
-- `frontend/src/services/socket.ts` - Socket.IO client
-- `frontend/src/types/index.ts` - TypeScript interfaces
+### Phase 2: Core MSF Integration ✅
+- [x] **Dashboard** - Overview with module stats, session count, connection status
+- [x] **Module Browser** - Search/filter by type (exploit, payload, auxiliary, post, encoder, nop)
+- [x] **Session Management** - List sessions, kill sessions, real-time updates via WebSocket
+- [x] **Session Terminal** - Interactive shell/meterpreter terminal with:
+  - Colored prompts (magenta for meterpreter, green for shell)
+  - Command history (↑/↓ arrows)
+  - Cursor navigation (←/→ arrows, Home/End)
+  - Ctrl+C support
+- [x] **msfconsole Terminal** - Full interactive console with:
+  - Styled `msf6 >` prompt
+  - Welcome banner
+  - Tab support for multiple consoles
+  - Command history and editing
+  - Fullscreen mode
+- [x] **Listener Management** - Create/kill handlers with quick templates
+- [x] **Payload Generator** - Full-featured with:
+  - 22+ payload templates (Windows, Linux, Android, macOS, Multi)
+  - Dynamic options fetching
+  - Encoder selection with iterations
+  - Bad character filtering
+  - Multiple output formats (exe, dll, elf, apk, ps1, py, raw, etc.)
+  - Payload hosting with custom URLs
+
+---
+
+## Next Phase: Phase 3 - Target & Network
+
+### Overview
+Phase 3 focuses on target management and network visualization to provide a comprehensive view of the engagement scope.
+
+### Features to Implement
+
+#### 3.1 Target/Host Management
+**Purpose**: Central database for tracking all hosts in the engagement
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Host CRUD | Add, edit, delete target hosts | High |
+| Host Details | IP, hostname, OS, notes, tags | High |
+| Status Tracking | Online/offline, compromised status | Medium |
+| Host Groups | Organize hosts by network/purpose | Medium |
+| Import Hosts | Import from file (CSV, XML) | Low |
+
+**UI Components Needed**:
+- `Targets.tsx` - Main targets page
+- `TargetCard.tsx` - Individual host display
+- `AddTargetModal.tsx` - Form to add/edit hosts
+- `targetStore.ts` - Zustand store for hosts
+
+**Backend Endpoints**:
+```
+GET    /api/v1/targets          - List all targets
+POST   /api/v1/targets          - Add new target
+GET    /api/v1/targets/{id}     - Get target details
+PUT    /api/v1/targets/{id}     - Update target
+DELETE /api/v1/targets/{id}     - Delete target
+POST   /api/v1/targets/import   - Import from file
+```
+
+#### 3.2 Network Topology Visualization
+**Purpose**: Visual map showing network relationships and attack paths
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Network Graph | D3.js interactive visualization | High |
+| Auto-layout | Automatic node positioning | High |
+| Pivot Paths | Show session routes/pivots | Medium |
+| Zoom/Pan | Navigate large networks | Medium |
+| Node Actions | Right-click context menu | Low |
+
+**Implementation**:
+- Use D3.js force-directed graph
+- Nodes = hosts, Edges = connections/pivots
+- Color coding: green (compromised), yellow (scanned), gray (unknown)
+- Click node to see details, double-click to open session
+
+#### 3.3 Service Enumeration Display
+**Purpose**: Track discovered services on each host
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Service List | Port, protocol, service name, version | High |
+| Vuln Linking | Link services to potential exploits | Medium |
+| Banner Grab | Display service banners | Low |
+| Service Search | Find hosts by service type | Medium |
+
+**Data Model**:
+```typescript
+interface Service {
+  id: string
+  host_id: string
+  port: number
+  protocol: 'tcp' | 'udp'
+  service: string
+  version?: string
+  banner?: string
+  state: 'open' | 'filtered' | 'closed'
+}
+```
+
+#### 3.4 Nmap Integration
+**Purpose**: Run scans directly from UI and import results
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Quick Scan | Common scan profiles | High |
+| Custom Scan | Full nmap options | Medium |
+| Scan Progress | Real-time scan status | High |
+| Result Import | Parse and import XML results | High |
+| Auto-populate | Create hosts from scan results | High |
+
+**Scan Profiles**:
+- Quick Scan: `-T4 -F`
+- Full Scan: `-T4 -A -p-`
+- Stealth Scan: `-sS -T2`
+- UDP Scan: `-sU --top-ports 100`
+- Vuln Scan: `--script vuln`
+
+---
+
+## Future Phases Overview
+
+### Phase 4: Post-Exploitation
+- Post-exploitation module browser (filter by session type)
+- Credential vault (store harvested creds, hash cracking)
+- File browser for meterpreter sessions (upload/download)
+- Screenshot and keylogger viewers
+- Process list and management
+- Privilege escalation suggestions
+
+### Phase 5: Advanced Features
+- Automation workflows (attack chains, scheduled tasks)
+- Team collaboration (multi-user, shared sessions, activity log)
+- Reporting system (engagement timeline, PDF/HTML export)
+- Android app packaging (Capacitor)
+- Notifications (desktop/push for new sessions)
 
 ---
 
@@ -94,7 +203,7 @@ msfrpcd -P yourpassword -S -a 127.0.0.1
 ### Start Backend
 ```bash
 cd /home/riyo/metasploitGui/backend
-source venv/bin/activate  # if using virtualenv
+source venv/bin/activate
 uvicorn main:socket_app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -115,74 +224,6 @@ npm run dev
 
 ---
 
-## Next Phases
-
-### Phase 2: Core MSF Integration (Partially Done)
-- [x] Module browser with search/filter
-- [x] Session management with live updates
-- [x] Interactive terminal (msfconsole proxy)
-- [x] Handler/listener management
-- [x] Basic payload generation
-- [ ] Module execution UI improvements
-- [ ] Session interaction panel (run commands from UI)
-
-### Phase 3: Target & Network
-- [ ] **Target/host management**
-  - Add/edit/delete target hosts
-  - Track host status and notes
-  - Tag and categorize hosts
-- [ ] **Network topology visualization**
-  - D3.js interactive graph
-  - Show connections between hosts
-  - Visualize pivoting paths
-- [ ] **Service enumeration display**
-  - List services per host
-  - Port/protocol/version info
-  - Link services to potential exploits
-- [ ] **Nmap integration**
-  - Run scans from UI
-  - Import scan results
-  - Auto-populate targets
-
-### Phase 4: Post-Exploitation
-- [ ] **Post-exploitation module browser**
-  - Filter by session type/platform
-  - Quick-run on selected session
-  - Module suggestions based on session
-- [ ] **Credential vault**
-  - Store harvested creds
-  - Hash cracking integration
-  - Pass-the-hash support
-- [ ] **File browser for sessions**
-  - Browse remote filesystem
-  - Upload/download files
-  - File operations (delete, rename)
-- [ ] **Screenshot/keylogger viewers**
-  - View captured screenshots
-  - Keylogger log viewer
-  - Webcam snapshots
-
-### Phase 5: Advanced Features
-- [ ] **Automation workflows**
-  - Create attack chains
-  - Scheduled tasks
-  - Auto-exploit on new sessions
-- [ ] **Team collaboration**
-  - Multi-operator support
-  - Shared sessions
-  - Activity log
-  - Chat/notes
-- [ ] **Reporting system**
-  - Engagement timeline
-  - Finding documentation
-  - Export to PDF/HTML
-- [ ] **Android app packaging**
-  - Capacitor setup
-  - Native Android build
-  - Push notifications
-
----
-
 ## Project Structure
 ```
 metasploitGui/
@@ -190,14 +231,14 @@ metasploitGui/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── dashboard/       # Main dashboard
-│   │   │   ├── sessions/        # Session management
+│   │   │   ├── sessions/        # Session management + terminal
 │   │   │   ├── modules/         # Module browser
 │   │   │   ├── listeners/       # Listener/handler config
 │   │   │   ├── payloads/        # Payload generator
-│   │   │   ├── terminal/        # Interactive console
-│   │   │   └── layout/          # App layout components
+│   │   │   ├── terminal/        # msfconsole terminal
+│   │   │   └── common/          # Layout, Login
 │   │   ├── services/            # API and Socket clients
-│   │   ├── store/               # Zustand stores
+│   │   ├── store/               # Zustand state stores
 │   │   └── types/               # TypeScript definitions
 │   └── package.json
 │
@@ -220,16 +261,16 @@ metasploitGui/
 ---
 
 ## Known Issues
-1. Session shell interaction needs WebSocket integration for real-time output
-2. Module execution results need better display
-3. Hosted payloads are stored in `/tmp` (lost on reboot)
+1. Hosted payloads are stored in `/tmp` (lost on reboot)
+2. Module execution results could use better formatting
+3. No error boundaries in React (crashes can blank the page)
 
 ---
 
 ## Notes
-- Plan file location: `/home/riyo/.claude/plans/ancient-juggling-moon.md`
 - Payload templates include 4 Android payloads
 - Custom payload hosting URLs: `http://<IP>:<PORT>/dl/<custom-path>`
+- Session terminals persist across page navigation
 
 ---
 
