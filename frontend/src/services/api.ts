@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo } from '../types'
+import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -526,6 +526,143 @@ class ApiClient {
   // Screenshot
   async takeScreenshot(sessionId: number): Promise<{ success: boolean; message: string }> {
     return (await this.client.post(`/postex/sessions/${sessionId}/screenshot`)).data
+  }
+
+  // ==================== Automation ====================
+
+  // Workflow Templates
+  async getWorkflowTemplates(): Promise<{ templates: WorkflowTemplate[] }> {
+    return (await this.client.get('/automation/templates')).data
+  }
+
+  async getWorkflowTemplate(templateId: string): Promise<{ name: string; description: string; steps: WorkflowStep[] }> {
+    return (await this.client.get(`/automation/templates/${templateId}`)).data
+  }
+
+  // Workflows
+  async getWorkflows(status?: string): Promise<{ workflows: Workflow[]; count: number; running: number }> {
+    const params = status ? `?status=${status}` : ''
+    return (await this.client.get(`/automation${params}`)).data
+  }
+
+  async getWorkflow(workflowId: string): Promise<Workflow> {
+    return (await this.client.get(`/automation/${workflowId}`)).data
+  }
+
+  async createWorkflow(workflow: {
+    name: string
+    description?: string
+    target_session?: number
+    target_host?: string
+    steps: WorkflowStep[]
+    tags?: string[]
+  }): Promise<Workflow> {
+    return (await this.client.post('/automation', workflow)).data
+  }
+
+  async createWorkflowFromTemplate(
+    templateId: string,
+    name?: string,
+    targetSession?: number,
+    targetHost?: string
+  ): Promise<Workflow> {
+    const params = new URLSearchParams()
+    if (name) params.append('name', name)
+    if (targetSession) params.append('target_session', String(targetSession))
+    if (targetHost) params.append('target_host', targetHost)
+    const query = params.toString() ? `?${params}` : ''
+    return (await this.client.post(`/automation/from-template/${templateId}${query}`)).data
+  }
+
+  async updateWorkflow(workflowId: string, update: Partial<Workflow>): Promise<Workflow> {
+    return (await this.client.put(`/automation/${workflowId}`, update)).data
+  }
+
+  async deleteWorkflow(workflowId: string): Promise<void> {
+    await this.client.delete(`/automation/${workflowId}`)
+  }
+
+  async runWorkflow(workflowId: string): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/automation/${workflowId}/run`)).data
+  }
+
+  async stopWorkflow(workflowId: string): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/automation/${workflowId}/stop`)).data
+  }
+
+  async duplicateWorkflow(workflowId: string): Promise<Workflow> {
+    return (await this.client.post(`/automation/${workflowId}/duplicate`)).data
+  }
+
+  // Activity Log
+  async getActivityLog(limit: number = 100, action?: string, status?: string): Promise<{
+    entries: ActivityLogEntry[]
+    count: number
+    total: number
+  }> {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (action) params.append('action', action)
+    if (status) params.append('status', status)
+    return (await this.client.get(`/automation/activity/log?${params}`)).data
+  }
+
+  async addActivityLog(entry: { action: string; details: string; target?: string; status?: string }): Promise<ActivityLogEntry> {
+    return (await this.client.post('/automation/activity/log', entry)).data
+  }
+
+  async clearActivityLog(): Promise<void> {
+    await this.client.delete('/automation/activity/log')
+  }
+
+  // ==================== Reports ====================
+
+  async getReports(): Promise<{ reports: Report[]; count: number }> {
+    return (await this.client.get('/reports')).data
+  }
+
+  async getReport(reportId: string): Promise<Report> {
+    return (await this.client.get(`/reports/${reportId}`)).data
+  }
+
+  async createReport(config: ReportConfig): Promise<Report> {
+    return (await this.client.post('/reports', config)).data
+  }
+
+  async previewReport(config: Partial<ReportConfig>): Promise<ReportData> {
+    const params = new URLSearchParams()
+    if (config.include_targets !== undefined) params.append('include_targets', String(config.include_targets))
+    if (config.include_credentials !== undefined) params.append('include_credentials', String(config.include_credentials))
+    if (config.include_activity !== undefined) params.append('include_activity', String(config.include_activity))
+    if (config.include_scans !== undefined) params.append('include_scans', String(config.include_scans))
+    if (config.include_workflows !== undefined) params.append('include_workflows', String(config.include_workflows))
+    if (config.date_from) params.append('date_from', config.date_from)
+    if (config.date_to) params.append('date_to', config.date_to)
+    return (await this.client.get(`/reports/preview?${params}`)).data
+  }
+
+  async exportReportHtml(reportId: string): Promise<Blob> {
+    const response = await this.client.get(`/reports/${reportId}/export/html`, { responseType: 'blob' })
+    return response.data
+  }
+
+  async exportReportJson(reportId: string): Promise<Blob> {
+    const response = await this.client.get(`/reports/${reportId}/export/json`, { responseType: 'blob' })
+    return response.data
+  }
+
+  async deleteReport(reportId: string): Promise<void> {
+    await this.client.delete(`/reports/${reportId}`)
+  }
+
+  async getEngagementStats(): Promise<{
+    targets: { total: number; compromised: number; online: number }
+    services: { total: number }
+    credentials: { total: number; with_password: number; with_hash: number }
+    workflows: { total: number; completed: number; running: number }
+    scans: { total: number }
+    activity: { total: number }
+  }> {
+    return (await this.client.get('/reports/stats/summary')).data
   }
 }
 

@@ -174,6 +174,104 @@ export interface SystemInfo {
   meterpreter?: string
 }
 
+export interface WorkflowStep {
+  id?: string
+  type: 'exploit' | 'auxiliary' | 'post' | 'command' | 'delay'
+  name: string
+  module?: string
+  command?: string
+  options?: Record<string, unknown>
+  delay_seconds?: number
+  continue_on_fail?: boolean
+  description?: string
+}
+
+export interface Workflow {
+  id: string
+  name: string
+  description?: string
+  target_session?: number
+  target_host?: string
+  steps: WorkflowStep[]
+  tags: string[]
+  status: 'draft' | 'ready' | 'running' | 'completed' | 'failed' | 'paused'
+  created_at: string
+  updated_at: string
+  created_by?: string
+  current_step?: number
+  results?: WorkflowStepResult[]
+  error?: string
+}
+
+export interface WorkflowStepResult {
+  step_index: number
+  step_name: string
+  type: string
+  started_at: string
+  completed_at?: string
+  status: 'running' | 'success' | 'failed'
+  output: string
+  error?: string
+}
+
+export interface WorkflowTemplate {
+  id: string
+  name: string
+  description: string
+  step_count: number
+}
+
+export interface ActivityLogEntry {
+  id: string
+  timestamp: string
+  action: string
+  details: string
+  user?: string
+  target?: string
+  session_id?: number
+  status: 'info' | 'success' | 'warning' | 'error'
+}
+
+export interface Report {
+  id: string
+  name: string
+  description?: string
+  type: 'engagement' | 'executive' | 'technical'
+  config: ReportConfig
+  data: ReportData
+  created_at: string
+  created_by?: string
+}
+
+export interface ReportConfig {
+  name: string
+  description?: string
+  type?: string
+  include_targets?: boolean
+  include_credentials?: boolean
+  include_activity?: boolean
+  include_scans?: boolean
+  include_workflows?: boolean
+  date_from?: string
+  date_to?: string
+}
+
+export interface ReportData {
+  generated_at: string
+  summary: {
+    total_targets?: number
+    compromised_targets?: number
+    total_services?: number
+    total_credentials?: number
+    total_activities?: number
+    total_scans?: number
+    total_workflows?: number
+  }
+  targets?: { items: Target[]; count: number }
+  credentials?: { items: Credential[]; count: number }
+  activity?: { items: ActivityLogEntry[]; count: number }
+}
+
 export interface Listener {
   job_id: string
   payload: string
