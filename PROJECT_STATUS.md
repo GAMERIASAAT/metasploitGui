@@ -19,7 +19,7 @@ A cross-platform GUI (Browser + Android) for Metasploit Framework combining feat
 |-------|--------|----------|
 | Phase 1: Foundation | ✅ Complete | 100% |
 | Phase 2: Core MSF Integration | ✅ Complete | 100% |
-| Phase 3: Target & Network | 🔲 Not Started | 0% |
+| Phase 3: Target & Network | 🟡 In Progress | 75% |
 | Phase 4: Post-Exploitation | 🔲 Not Started | 0% |
 | Phase 5: Advanced Features | 🔲 Not Started | 0% |
 
@@ -60,98 +60,60 @@ A cross-platform GUI (Browser + Android) for Metasploit Framework combining feat
 
 ---
 
-## Next Phase: Phase 3 - Target & Network
+### Phase 3: Target & Network (75% Complete)
 
-### Overview
-Phase 3 focuses on target management and network visualization to provide a comprehensive view of the engagement scope.
+#### 3.1 Target/Host Management ✅
+- [x] Full CRUD operations (create, read, update, delete)
+- [x] Host details: IP, hostname, OS, OS family, architecture, notes, tags
+- [x] Status tracking: unknown, online, offline, compromised
+- [x] Host groups for organization
+- [x] Bulk operations (delete, status update)
+- [x] Stats dashboard with counts by status, OS, groups
+- [x] Target search and filtering
+- [x] File-based persistence (`/tmp/msf_gui_targets.json`)
 
-### Features to Implement
+**Backend API**: `/api/v1/targets`
+**Frontend**: `Targets.tsx`, `targetStore.ts`
 
-#### 3.1 Target/Host Management
-**Purpose**: Central database for tracking all hosts in the engagement
+#### 3.2 Network Topology Visualization 🔲 (Optional/Deferred)
+- [ ] D3.js interactive network graph
+- [ ] Auto-layout with force-directed positioning
+- [ ] Pivot path visualization
+- [ ] Zoom/pan navigation
+- [ ] Node context menu actions
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| Host CRUD | Add, edit, delete target hosts | High |
-| Host Details | IP, hostname, OS, notes, tags | High |
-| Status Tracking | Online/offline, compromised status | Medium |
-| Host Groups | Organize hosts by network/purpose | Medium |
-| Import Hosts | Import from file (CSV, XML) | Low |
+*Note: Moved to optional/future as not essential for core functionality*
 
-**UI Components Needed**:
-- `Targets.tsx` - Main targets page
-- `TargetCard.tsx` - Individual host display
-- `AddTargetModal.tsx` - Form to add/edit hosts
-- `targetStore.ts` - Zustand store for hosts
+#### 3.3 Service Enumeration ✅
+- [x] Service tracking per host (port, protocol, service name, version, banner)
+- [x] Service CRUD operations
+- [x] Service state tracking (open, filtered, closed)
+- [x] Display in expandable target rows
+- [x] Auto-import from nmap scans
 
-**Backend Endpoints**:
-```
-GET    /api/v1/targets          - List all targets
-POST   /api/v1/targets          - Add new target
-GET    /api/v1/targets/{id}     - Get target details
-PUT    /api/v1/targets/{id}     - Update target
-DELETE /api/v1/targets/{id}     - Delete target
-POST   /api/v1/targets/import   - Import from file
-```
+**Backend API**: `/api/v1/targets/{id}/services`
 
-#### 3.2 Network Topology Visualization
-**Purpose**: Visual map showing network relationships and attack paths
+#### 3.4 Nmap Integration ✅
+- [x] 7 predefined scan profiles:
+  - Quick Scan (`-T4 -F`)
+  - Full Scan (`-T4 -A -p-`)
+  - Stealth Scan (`-sS -T2`)
+  - UDP Scan (`-sU --top-ports 100`)
+  - Vulnerability Scan (`-sV --script vuln`)
+  - Host Discovery (`-sn`)
+  - Service Version (`-sV`)
+- [x] Custom scan arguments support
+- [x] Background task execution with status polling
+- [x] XML result parsing
+- [x] Auto-import discovered hosts and services to targets
+- [x] Scan history with results display
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| Network Graph | D3.js interactive visualization | High |
-| Auto-layout | Automatic node positioning | High |
-| Pivot Paths | Show session routes/pivots | Medium |
-| Zoom/Pan | Navigate large networks | Medium |
-| Node Actions | Right-click context menu | Low |
+**Backend API**: `/api/v1/nmap`
+**UI**: Scan modal in Targets page
 
-**Implementation**:
-- Use D3.js force-directed graph
-- Nodes = hosts, Edges = connections/pivots
-- Color coding: green (compromised), yellow (scanned), gray (unknown)
-- Click node to see details, double-click to open session
+---
 
-#### 3.3 Service Enumeration Display
-**Purpose**: Track discovered services on each host
-
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| Service List | Port, protocol, service name, version | High |
-| Vuln Linking | Link services to potential exploits | Medium |
-| Banner Grab | Display service banners | Low |
-| Service Search | Find hosts by service type | Medium |
-
-**Data Model**:
-```typescript
-interface Service {
-  id: string
-  host_id: string
-  port: number
-  protocol: 'tcp' | 'udp'
-  service: string
-  version?: string
-  banner?: string
-  state: 'open' | 'filtered' | 'closed'
-}
-```
-
-#### 3.4 Nmap Integration
-**Purpose**: Run scans directly from UI and import results
-
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| Quick Scan | Common scan profiles | High |
-| Custom Scan | Full nmap options | Medium |
-| Scan Progress | Real-time scan status | High |
-| Result Import | Parse and import XML results | High |
-| Auto-populate | Create hosts from scan results | High |
-
-**Scan Profiles**:
-- Quick Scan: `-T4 -F`
-- Full Scan: `-T4 -A -p-`
-- Stealth Scan: `-sS -T2`
-- UDP Scan: `-sU --top-ports 100`
-- Vuln Scan: `--script vuln`
+## Next Phase: Phase 4 - Post-Exploitation
 
 ---
 
@@ -236,16 +198,17 @@ metasploitGui/
 │   │   │   ├── listeners/       # Listener/handler config
 │   │   │   ├── payloads/        # Payload generator
 │   │   │   ├── terminal/        # msfconsole terminal
+│   │   │   ├── targets/         # Target management + nmap
 │   │   │   └── common/          # Layout, Login
 │   │   ├── services/            # API and Socket clients
-│   │   ├── store/               # Zustand state stores
+│   │   ├── store/               # Zustand state stores (auth, module, session, target)
 │   │   └── types/               # TypeScript definitions
 │   └── package.json
 │
 ├── backend/                     # FastAPI server
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── routes/          # API endpoints
+│   │   │   ├── routes/          # API endpoints (auth, sessions, modules, console, listeners, payloads, targets, nmap)
 │   │   │   └── websocket.py     # Socket.IO handler
 │   │   ├── core/
 │   │   │   ├── msf_client.py    # Metasploit RPC wrapper
@@ -274,4 +237,4 @@ metasploitGui/
 
 ---
 
-Last Updated: 2026-01-21
+Last Updated: 2026-01-22
