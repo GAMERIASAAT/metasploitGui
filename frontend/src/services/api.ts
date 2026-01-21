@@ -188,7 +188,7 @@ class ApiClient {
     return (await this.client.get('/payloads/formats')).data
   }
 
-  async getPayloadEncoders(): Promise<{ encoders: string[]; count: number }> {
+  async getPayloadEncoders(): Promise<{ encoders: unknown[]; count: number }> {
     return (await this.client.get('/payloads/encoders')).data
   }
 

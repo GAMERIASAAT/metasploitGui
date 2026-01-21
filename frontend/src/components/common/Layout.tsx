@@ -10,7 +10,6 @@ import {
   Terminal,
   LogOut,
   Menu,
-  X,
   Shield,
 } from 'lucide-react'
 

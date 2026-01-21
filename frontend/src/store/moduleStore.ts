@@ -21,7 +21,7 @@ interface ModuleState {
   setSearchQuery: (query: string) => void
 }
 
-export const useModuleStore = create<ModuleState>((set, get) => ({
+export const useModuleStore = create<ModuleState>((set) => ({
   stats: null,
   modules: [],
   selectedModule: null,

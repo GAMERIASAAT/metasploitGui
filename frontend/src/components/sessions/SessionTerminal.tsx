@@ -21,6 +21,14 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
 
   const sessionType = session.type === 'meterpreter' ? 'meterpreter' : 'shell'
 
+  // Styled prompts with colors
+  const getPrompt = () => {
+    if (session.type === 'meterpreter') {
+      return '\x1b[1;35mmeterpreter\x1b[0m > ' // Bold magenta
+    }
+    return '\x1b[1;32mshell\x1b[0m > ' // Bold green
+  }
+
   const getSessionIcon = () => {
     if (session.platform?.toLowerCase().includes('windows')) {
       return <Monitor className="w-4 h-4" />
@@ -87,16 +95,21 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
     terminal.writeln('╚════════════════════════════════════════════════════════════╝\x1b[0m')
     terminal.writeln('')
 
+    // Write initial prompt
+    const prompt = getPrompt()
+    terminal.write(prompt)
+
     // State for input handling (stored outside React for closure access)
     let inputBuffer = ''
     let cursorPos = 0
     const commandHistory: string[] = []
     let historyIndex = -1
 
-    // Helper to redraw the current input line
+    // Helper to redraw the current input line with prompt
     const redrawInput = () => {
-      terminal.write('\r\x1b[K')
-      terminal.write(inputBuffer)
+      terminal.write('\r\x1b[K') // Clear line
+      terminal.write(prompt) // Write prompt
+      terminal.write(inputBuffer) // Write input
       if (cursorPos < inputBuffer.length) {
         terminal.write(`\x1b[${inputBuffer.length - cursorPos}D`)
       }
@@ -177,10 +190,11 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
           commandHistory.push(inputBuffer)
         }
         historyIndex = -1
+        terminal.write('\r\n') // Move to new line
         socketService.sendSessionInput(session.id, inputBuffer, sessionType)
         inputBuffer = ''
         cursorPos = 0
-        terminal.write('\r\n')
+        // Prompt will be written by the output handler after response arrives
       } else if (data === '\x7f' || data === '\b') {
         if (cursorPos > 0) {
           inputBuffer = inputBuffer.slice(0, cursorPos - 1) + inputBuffer.slice(cursorPos)
@@ -204,6 +218,10 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
       }
     })
 
+    // Track if we need to write a prompt after output
+    let outputReceived = false
+    let promptTimer: ReturnType<typeof setTimeout> | null = null
+
     // Subscribe to session output
     const unsubscribe = socketService.subscribeSessionOutput(
       session.id,
@@ -212,14 +230,27 @@ export default function SessionTerminal({ session, onClose }: SessionTerminalPro
         if (data.closed) {
           terminal.writeln('\r\n\x1b[31m[Session closed]\x1b[0m')
         } else if (data.data) {
+          outputReceived = true
           const normalizedData = data.data.replace(/\r?\n/g, '\r\n')
           terminal.write(normalizedData)
+
+          // Debounce prompt writing - wait for output to settle
+          if (promptTimer) clearTimeout(promptTimer)
+          promptTimer = setTimeout(() => {
+            if (outputReceived) {
+              // Ensure we're on a new line
+              terminal.write('\r\n')
+              terminal.write(prompt)
+              outputReceived = false
+            }
+          }, 100)
         }
       }
     )
     unsubscribeRef.current = unsubscribe
 
     return () => {
+      if (promptTimer) clearTimeout(promptTimer)
       unsubscribe()
       terminal.dispose()
     }

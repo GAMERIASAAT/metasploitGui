@@ -71,6 +71,11 @@ A cross-platform GUI (Browser + Android) for Metasploit Framework combining feat
 3. **Android APK** - No `-f` flag needed for android payloads
 4. **Terminal output** - Fixed line ending issues with `convertEol: true`
 5. **Payload hosting** - Custom URL paths (`/dl/downloadandroid`), IP/port config
+6. **Terminal Prompts** - Added styled `msf6 >` prompt and welcome banner to msfconsole terminal
+7. **Session Terminal** - Added colored prompts for meterpreter/shell sessions
+8. **Payloads Page Crash** - Fixed encoder handling (API returns objects, not strings)
+9. **TypeScript Errors** - Fixed unused imports and type mismatches across components
+10. **Debounce Fix** - Fixed broken debounce in payload options fetching
 
 ---
 
@@ -228,4 +233,4 @@ metasploitGui/
 
 ---
 
-Last Updated: 2026-01-18
+Last Updated: 2026-01-21

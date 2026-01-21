@@ -12,7 +12,7 @@ interface CommonPayload {
 }
 
 export default function Listeners() {
-  const { jobs, isLoading, fetchJobs, createHandler, killJob } = useListenerStore()
+  const { jobs, fetchJobs, createHandler, killJob } = useListenerStore()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [commonPayloads, setCommonPayloads] = useState<CommonPayload[]>([])
   const [formData, setFormData] = useState({

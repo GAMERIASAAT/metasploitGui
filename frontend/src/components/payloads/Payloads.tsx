@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { api } from '../../services/api'
 import { PayloadTemplate } from '../../types'
 import {
@@ -90,11 +90,46 @@ export default function Payloads() {
   // Platform filter
   const [platformFilter, setPlatformFilter] = useState<string>('all')
 
+  // Ref for debounce timer
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
-    api.getPayloadTemplates().then((data) => setTemplates(data.templates))
-    api.getPayloadFormats().then(setFormats)
-    api.getPayloadEncoders().then((data) => setEncoders(data.encoders || []))
+    // Load initial data with error handling
+    api.getPayloadTemplates()
+      .then((data) => setTemplates(data.templates || []))
+      .catch((e) => console.error('Failed to load templates:', e))
+
+    api.getPayloadFormats()
+      .then(setFormats)
+      .catch((e) => console.error('Failed to load formats:', e))
+
+    api.getPayloadEncoders()
+      .then((data) => {
+        // Handle both string array and object array from API
+        const encoderList = (data.encoders || []).map((enc: unknown) => {
+          if (typeof enc === 'string') {
+            return { name: enc, rank: 'normal', description: '' }
+          }
+          // Already an object - safely extract properties
+          const encObj = enc as Record<string, unknown>
+          return {
+            name: String(encObj.name || ''),
+            rank: String(encObj.rank || 'normal'),
+            description: String(encObj.description || ''),
+          }
+        })
+        setEncoders(encoderList)
+      })
+      .catch((e) => console.error('Failed to load encoders:', e))
+
     loadHostedPayloads()
+
+    // Cleanup debounce timer on unmount
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
   }, [])
 
   const loadHostedPayloads = async () => {
@@ -114,22 +149,24 @@ export default function Payloads() {
       const data = await api.getPayloadOptions(payloadName)
       setPayloadOptions(data.options || {})
 
-      // Set default values for options
-      const newOptions: Record<string, string> = { ...options }
-      Object.entries(data.options || {}).forEach(([key, opt]) => {
-        const option = opt as PayloadOption
-        if (option.default !== null && option.default !== undefined && !newOptions[key]) {
-          newOptions[key] = String(option.default)
-        }
+      // Set default values for options using functional update to avoid stale closure
+      setOptions((prevOptions) => {
+        const newOptions: Record<string, string> = { ...prevOptions }
+        Object.entries(data.options || {}).forEach(([key, opt]) => {
+          const option = opt as PayloadOption
+          if (option.default !== null && option.default !== undefined && !newOptions[key]) {
+            newOptions[key] = String(option.default)
+          }
+        })
+        return newOptions
       })
-      setOptions(newOptions)
     } catch (e) {
       console.error('Failed to fetch payload options:', e)
       setPayloadOptions({})
     } finally {
       setLoadingOptions(false)
     }
-  }, [options])
+  }, [])
 
   const handleTemplateSelect = (template: PayloadTemplate) => {
     setSelectedTemplate(template)
@@ -144,12 +181,17 @@ export default function Payloads() {
 
   const handlePayloadChange = (payload: string) => {
     setCustomPayload(payload)
+
+    // Clear any existing debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
     if (payload && payload.includes('/')) {
       // Debounce the fetch
-      const timer = setTimeout(() => {
+      debounceTimerRef.current = setTimeout(() => {
         fetchPayloadOptions(payload)
       }, 500)
-      return () => clearTimeout(timer)
     }
   }
 
@@ -513,8 +555,8 @@ export default function Payloads() {
                   className="input"
                 >
                   <option value="">None</option>
-                  {encoders.map((enc) => (
-                    <option key={enc.name} value={enc.name}>
+                  {encoders.map((enc, index) => (
+                    <option key={`${enc.name}-${index}`} value={enc.name}>
                       {enc.name} ({enc.rank})
                     </option>
                   ))}

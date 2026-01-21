@@ -22,6 +22,9 @@ export default function Terminal({ visible = true }: TerminalProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
 
+  // Styled prompt for msfconsole
+  const PROMPT = '\x1b[1;31mmsf6\x1b[0m > ' // Bold red "msf6" + white " > "
+
   const createNewConsole = async () => {
     const consoleId = await socketService.createConsole()
 
@@ -49,8 +52,10 @@ export default function Terminal({ visible = true }: TerminalProps) {
         brightCyan: '#76e3ea',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace',
       fontSize: 14,
+      lineHeight: 1.2,
+      letterSpacing: 0,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
@@ -63,17 +68,27 @@ export default function Terminal({ visible = true }: TerminalProps) {
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(webLinksAddon)
 
+    // Write welcome banner
+    terminal.writeln('\x1b[36m╔══════════════════════════════════════════════════════════════╗')
+    terminal.writeln('║  \x1b[1;37mMetasploit Framework Console\x1b[0m\x1b[36m                              ║')
+    terminal.writeln('║  \x1b[33mType commands below to interact with msfconsole\x1b[0m\x1b[36m             ║')
+    terminal.writeln('╚══════════════════════════════════════════════════════════════╝\x1b[0m')
+    terminal.writeln('')
+
+    // Write initial prompt
+    terminal.write(PROMPT)
+
     // State for this console (stored outside React for closure access)
     let inputBuffer = ''
     let cursorPos = 0
     const commandHistory: string[] = []
     let historyIndex = -1
 
-    // Helper to redraw the current input line
+    // Helper to redraw the current input line with prompt
     const redrawInput = () => {
-      // Move to start of input, clear to end, write buffer, position cursor
       terminal.write('\r\x1b[K') // Carriage return + clear line
-      terminal.write(inputBuffer)
+      terminal.write(PROMPT) // Write prompt
+      terminal.write(inputBuffer) // Write input buffer
       // Move cursor to correct position
       if (cursorPos < inputBuffer.length) {
         terminal.write(`\x1b[${inputBuffer.length - cursorPos}D`)
@@ -202,17 +217,34 @@ export default function Terminal({ visible = true }: TerminalProps) {
       // Ignore escape sequences (handled by attachCustomKeyEventHandler)
     })
 
+    // Track if we need to write a prompt after output
+    let outputReceived = false
+    let promptTimer: ReturnType<typeof setTimeout> | null = null
+
     // Handle output from console
     const unsubscribe = socketService.onConsoleOutput(consoleId, (output) => {
       if (output.data) {
+        outputReceived = true
         const normalizedData = output.data.replace(/\r?\n/g, '\r\n')
         terminal.write(normalizedData)
+
+        // Debounce prompt writing - wait for output to settle
+        if (promptTimer) clearTimeout(promptTimer)
+        promptTimer = setTimeout(() => {
+          if (outputReceived) {
+            // Ensure we're on a new line and show prompt
+            terminal.write('\r\n')
+            terminal.write(PROMPT)
+            outputReceived = false
+          }
+        }, 150)
       }
     })
 
     const newTab: ConsoleTab = { id: consoleId, terminal, fitAddon }
-    // Store unsubscribe function for cleanup
+    // Store unsubscribe function and timer for cleanup
     ;(newTab as any).unsubscribe = unsubscribe
+    ;(newTab as any).promptTimer = promptTimer
 
     setTabs((prev) => [...prev, newTab])
     setActiveTab(consoleId)
@@ -221,6 +253,7 @@ export default function Terminal({ visible = true }: TerminalProps) {
   const closeConsole = (consoleId: string) => {
     const tab = tabs.find((t) => t.id === consoleId)
     if (tab) {
+      if ((tab as any).promptTimer) clearTimeout((tab as any).promptTimer)
       ;(tab as any).unsubscribe?.()
       tab.terminal.dispose()
       socketService.destroyConsole(consoleId)
@@ -351,7 +384,10 @@ export default function Terminal({ visible = true }: TerminalProps) {
             <div
               ref={terminalContainerRef}
               className={`${isFullscreen ? 'flex-1' : 'h-[500px]'}`}
-              style={{ padding: '8px' }}
+              style={{
+                padding: '12px',
+                backgroundColor: '#0d1117',
+              }}
             />
           </>
         )}
