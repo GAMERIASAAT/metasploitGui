@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTargetStore } from '../../store/targetStore'
+import { api } from '../../services/api'
 import { Target, TargetCreate, ServiceCreate } from '../../types'
 import {
   Monitor,
@@ -16,7 +17,46 @@ import {
   AlertCircle,
   HelpCircle,
   RefreshCw,
+  Radar,
+  Loader2,
+  Clock,
+  CheckCircle2,
+  XOctagon,
 } from 'lucide-react'
+
+interface ScanProfile {
+  id: string
+  name: string
+  description: string
+  args: string
+}
+
+interface NmapScan {
+  id: string
+  targets: string
+  profile: string
+  status: string
+  created_at: string
+  completed_at?: string
+  results?: {
+    hosts: Array<{
+      ip: string
+      hostname: string
+      status: string
+      os: string
+      services: Array<{
+        port: number
+        protocol: string
+        service: string
+        version: string
+      }>
+    }>
+    total_hosts: number
+    hosts_up: number
+  }
+  imported?: number
+  error?: string
+}
 
 const STATUS_ICONS = {
   unknown: HelpCircle,
@@ -63,10 +103,20 @@ export default function Targets() {
 
   const [showAddModal, setShowAddModal] = useState(false)
   const [showServiceModal, setShowServiceModal] = useState(false)
+  const [showScanModal, setShowScanModal] = useState(false)
   const [editingTarget, setEditingTarget] = useState<Target | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set())
   const [expandedTarget, setExpandedTarget] = useState<string | null>(null)
+
+  // Nmap scan state
+  const [scanProfiles, setScanProfiles] = useState<ScanProfile[]>([])
+  const [scans, setScans] = useState<NmapScan[]>([])
+  const [scanTarget, setScanTarget] = useState('')
+  const [scanProfile, setScanProfile] = useState('quick')
+  const [customArgs, setCustomArgs] = useState('')
+  const [importResults, setImportResults] = useState(true)
+  const [scanning, setScanning] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState<TargetCreate>({
@@ -94,7 +144,55 @@ export default function Targets() {
   useEffect(() => {
     fetchTargets()
     fetchStats()
+    loadScanProfiles()
   }, [fetchTargets, fetchStats])
+
+  const loadScanProfiles = async () => {
+    try {
+      const data = await api.getNmapProfiles()
+      setScanProfiles(data.profiles)
+    } catch (e) {
+      console.error('Failed to load scan profiles:', e)
+    }
+  }
+
+  const loadScans = useCallback(async () => {
+    try {
+      const data = await api.getNmapScans()
+      setScans(data.scans)
+    } catch (e) {
+      console.error('Failed to load scans:', e)
+    }
+  }, [])
+
+  const handleStartScan = async () => {
+    if (!scanTarget) return
+    setScanning(true)
+    try {
+      await api.startNmapScan(
+        scanTarget,
+        scanProfile,
+        scanProfile === 'custom' ? customArgs : undefined,
+        importResults
+      )
+      await loadScans()
+      // Poll for scan completion
+      const pollInterval = setInterval(async () => {
+        const data = await api.getNmapScans()
+        setScans(data.scans)
+        if (data.active === 0) {
+          clearInterval(pollInterval)
+          fetchTargets()
+          fetchStats()
+        }
+      }, 2000)
+    } catch (e) {
+      console.error('Failed to start scan:', e)
+      alert('Failed to start scan. Make sure nmap is installed.')
+    } finally {
+      setScanning(false)
+    }
+  }
 
   const resetForm = () => {
     setFormData({
@@ -209,6 +307,16 @@ export default function Targets() {
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
+          </button>
+          <button
+            onClick={() => {
+              loadScans()
+              setShowScanModal(true)
+            }}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <Radar className="w-4 h-4" />
+            Nmap Scan
           </button>
           <button
             onClick={() => {
@@ -812,6 +920,204 @@ export default function Targets() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Nmap Scan Modal */}
+      {showScanModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-msf-border">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Radar className="w-5 h-5 text-msf-accent" />
+                Nmap Scanner
+              </h2>
+              <button
+                onClick={() => setShowScanModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Scan Form */}
+              <div className="bg-msf-darker rounded-lg p-4 space-y-4">
+                <h3 className="text-sm font-medium text-white">New Scan</h3>
+
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">
+                    Target(s) <span className="text-msf-red">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={scanTarget}
+                    onChange={(e) => setScanTarget(e.target.value)}
+                    placeholder="192.168.1.1, 192.168.1.0/24, or 192.168.1.1-50"
+                    className="input w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter IP address, CIDR range, or IP range
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Scan Profile</label>
+                  <select
+                    value={scanProfile}
+                    onChange={(e) => setScanProfile(e.target.value)}
+                    className="input w-full"
+                  >
+                    {scanProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name} - {profile.description}
+                      </option>
+                    ))}
+                    <option value="custom">Custom Arguments</option>
+                  </select>
+                </div>
+
+                {scanProfile === 'custom' && (
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">
+                      Custom Arguments <span className="text-msf-red">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customArgs}
+                      onChange={(e) => setCustomArgs(e.target.value)}
+                      placeholder="-sV -sC -T4"
+                      className="input w-full font-mono"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="importResults"
+                    checked={importResults}
+                    onChange={(e) => setImportResults(e.target.checked)}
+                    className="rounded border-gray-600"
+                  />
+                  <label htmlFor="importResults" className="text-sm text-gray-300">
+                    Automatically import discovered hosts to targets
+                  </label>
+                </div>
+
+                <button
+                  onClick={handleStartScan}
+                  disabled={!scanTarget || scanning || (scanProfile === 'custom' && !customArgs)}
+                  className="btn btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  {scanning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Starting Scan...
+                    </>
+                  ) : (
+                    <>
+                      <Radar className="w-4 h-4" />
+                      Start Scan
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Scan History */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-white">Scan History</h3>
+                  <button
+                    onClick={loadScans}
+                    className="text-xs text-msf-blue hover:text-msf-blue/80"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {scans.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    <Radar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No scan history</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {scans.map((scan) => (
+                      <div
+                        key={scan.id}
+                        className="bg-msf-darker rounded-lg p-3 border border-msf-border"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {scan.status === 'running' || scan.status === 'pending' ? (
+                                <Loader2 className="w-4 h-4 text-msf-blue animate-spin flex-shrink-0" />
+                              ) : scan.status === 'completed' ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                              ) : (
+                                <XOctagon className="w-4 h-4 text-msf-red flex-shrink-0" />
+                              )}
+                              <span className="text-white font-mono text-sm truncate">
+                                {scan.targets}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                              <span className="capitalize">{scan.profile}</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(scan.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {scan.status === 'completed' && scan.results && (
+                              <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded">
+                                {scan.results.hosts_up} hosts found
+                              </span>
+                            )}
+                            {scan.imported !== undefined && scan.imported > 0 && (
+                              <span className="text-xs px-2 py-1 bg-msf-blue/20 text-msf-blue rounded">
+                                {scan.imported} imported
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {scan.error && (
+                          <p className="text-xs text-msf-red mt-2">{scan.error}</p>
+                        )}
+                        {scan.status === 'completed' && scan.results && scan.results.hosts.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-msf-border">
+                            <p className="text-xs text-gray-400 mb-1">Discovered hosts:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {scan.results.hosts.slice(0, 10).map((host, i) => (
+                                <span
+                                  key={i}
+                                  className="text-xs px-2 py-0.5 bg-msf-card rounded font-mono text-gray-300"
+                                >
+                                  {host.ip}
+                                  {host.services.length > 0 && (
+                                    <span className="text-gray-500 ml-1">
+                                      ({host.services.length} ports)
+                                    </span>
+                                  )}
+                                </span>
+                              ))}
+                              {scan.results.hosts.length > 10 && (
+                                <span className="text-xs text-gray-500">
+                                  +{scan.results.hosts.length - 10} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

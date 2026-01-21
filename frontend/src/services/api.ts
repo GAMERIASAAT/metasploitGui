@@ -321,6 +321,75 @@ class ApiClient {
   async deleteService(targetId: string, serviceId: string): Promise<void> {
     await this.client.delete(`/targets/${targetId}/services/${serviceId}`)
   }
+
+  // Nmap Scanning
+  async getNmapProfiles(): Promise<{
+    profiles: Array<{
+      id: string
+      name: string
+      description: string
+      args: string
+    }>
+  }> {
+    return (await this.client.get('/nmap/profiles')).data
+  }
+
+  async startNmapScan(
+    targets: string,
+    profile: string,
+    customArgs?: string,
+    importResults: boolean = true
+  ): Promise<{ scan_id: string; status: string; message: string }> {
+    return (
+      await this.client.post('/nmap/scan', {
+        targets,
+        profile,
+        custom_args: customArgs,
+        import_results: importResults,
+      })
+    ).data
+  }
+
+  async getNmapScans(): Promise<{
+    scans: Array<{
+      id: string
+      targets: string
+      profile: string
+      status: string
+      created_at: string
+      completed_at?: string
+      results?: {
+        hosts: Array<{
+          ip: string
+          hostname: string
+          status: string
+          os: string
+          services: Array<{
+            port: number
+            protocol: string
+            service: string
+            version: string
+          }>
+        }>
+        total_hosts: number
+        hosts_up: number
+      }
+      imported?: number
+      error?: string
+    }>
+    active: number
+    completed: number
+  }> {
+    return (await this.client.get('/nmap/scans')).data
+  }
+
+  async getNmapScan(scanId: string) {
+    return (await this.client.get(`/nmap/scans/${scanId}`)).data
+  }
+
+  async deleteNmapScan(scanId: string): Promise<void> {
+    await this.client.delete(`/nmap/scans/${scanId}`)
+  }
 }
 
 export const api = new ApiClient()

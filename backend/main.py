@@ -10,7 +10,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.msf_client import msf_client
-from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets
+from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap
 from app.api.websocket import sio
 
 # Configure logging
@@ -71,6 +71,7 @@ app.include_router(console.router, prefix=f"{settings.api_prefix}/console", tags
 app.include_router(listeners.router, prefix=f"{settings.api_prefix}/listeners", tags=["Listeners"])
 app.include_router(payloads.router, prefix=f"{settings.api_prefix}/payloads", tags=["Payloads"])
 app.include_router(targets.router, prefix=f"{settings.api_prefix}/targets", tags=["Targets"])
+app.include_router(nmap.router, prefix=f"{settings.api_prefix}/nmap", tags=["Nmap"])
 
 # Mount Socket.IO
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
