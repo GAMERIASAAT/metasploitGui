@@ -11,6 +11,7 @@ import Modules from './components/modules/Modules'
 import Listeners from './components/listeners/Listeners'
 import Payloads from './components/payloads/Payloads'
 import Targets from './components/targets/Targets'
+import PostExploitation from './components/postex/PostExploitation'
 import Terminal from './components/terminal/Terminal'
 import SessionTerminal from './components/sessions/SessionTerminal'
 
@@ -61,6 +62,7 @@ function App() {
                   <Route path="/listeners" element={<Listeners />} />
                   <Route path="/payloads" element={<Payloads />} />
                   <Route path="/targets" element={<Targets />} />
+                  <Route path="/postex" element={<PostExploitation />} />
                   {/* Terminal placeholder - actual Terminal rendered below for persistence */}
                   <Route path="/terminal" element={null} />
                 </Routes>

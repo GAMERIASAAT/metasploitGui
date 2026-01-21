@@ -12,6 +12,7 @@ import {
   Menu,
   Shield,
   Monitor,
+  Crosshair,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -22,6 +23,7 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/targets', label: 'Targets', icon: Monitor },
   { path: '/sessions', label: 'Sessions', icon: Users },
+  { path: '/postex', label: 'Post-Exploit', icon: Crosshair },
   { path: '/modules', label: 'Modules', icon: Box },
   { path: '/listeners', label: 'Listeners', icon: Radio },
   { path: '/payloads', label: 'Payloads', icon: FileCode },

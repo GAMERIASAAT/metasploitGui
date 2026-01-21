@@ -112,12 +112,66 @@ export interface Vulnerability {
 
 export interface Credential {
   id: string
-  host?: string
-  service?: string
   username: string
   password?: string
   hash?: string
-  type: 'password' | 'hash' | 'ssh_key'
+  hash_type?: string
+  domain?: string
+  host?: string
+  service?: string
+  port?: number
+  notes?: string
+  source?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CredentialCreate {
+  username: string
+  password?: string
+  hash?: string
+  hash_type?: string
+  domain?: string
+  host?: string
+  service?: string
+  port?: number
+  notes?: string
+  source?: string
+}
+
+export interface PostModule {
+  name: string
+  fullname: string
+  platform: string
+  category: string
+}
+
+export interface ProcessInfo {
+  pid: number
+  ppid: number
+  name: string
+  arch: string
+  session: string
+  user: string
+  path: string
+}
+
+export interface FileInfo {
+  name: string
+  type: 'file' | 'directory'
+  size: number
+  mode: string
+  modified: string
+}
+
+export interface SystemInfo {
+  computer?: string
+  os?: string
+  architecture?: string
+  system_language?: string
+  domain?: string
+  logged_on_users?: string
+  meterpreter?: string
 }
 
 export interface Listener {

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate } from '../types'
+import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -389,6 +389,143 @@ class ApiClient {
 
   async deleteNmapScan(scanId: string): Promise<void> {
     await this.client.delete(`/nmap/scans/${scanId}`)
+  }
+
+  // Post-Exploitation Modules
+  async getPostModules(filters?: { platform?: string; search?: string }): Promise<{
+    modules: PostModule[]
+    count: number
+    platforms: string[]
+    categories: string[]
+  }> {
+    const params = new URLSearchParams()
+    if (filters?.platform) params.append('platform', filters.platform)
+    if (filters?.search) params.append('search', filters.search)
+    const query = params.toString() ? `?${params}` : ''
+    return (await this.client.get(`/postex/modules${query}`)).data
+  }
+
+  async getPostModuleInfo(modulePath: string): Promise<Module> {
+    return (await this.client.get(`/postex/modules/${modulePath}/info`)).data
+  }
+
+  async runPostModule(module: string, options: Record<string, unknown>): Promise<{ job_id?: string; uuid?: string; status: string }> {
+    return (await this.client.post('/postex/modules/run', { module, options })).data
+  }
+
+  // Credential Vault
+  async getCredentials(filters?: { host?: string; service?: string }): Promise<{
+    credentials: Credential[]
+    count: number
+    hosts: string[]
+    services: string[]
+  }> {
+    const params = new URLSearchParams()
+    if (filters?.host) params.append('host', filters.host)
+    if (filters?.service) params.append('service', filters.service)
+    const query = params.toString() ? `?${params}` : ''
+    return (await this.client.get(`/postex/credentials${query}`)).data
+  }
+
+  async addCredential(cred: CredentialCreate): Promise<Credential> {
+    return (await this.client.post('/postex/credentials', cred)).data
+  }
+
+  async updateCredential(id: string, update: Partial<CredentialCreate>): Promise<Credential> {
+    return (await this.client.put(`/postex/credentials/${id}`, update)).data
+  }
+
+  async deleteCredential(id: string): Promise<void> {
+    await this.client.delete(`/postex/credentials/${id}`)
+  }
+
+  async clearCredentials(): Promise<void> {
+    await this.client.delete('/postex/credentials')
+  }
+
+  // Meterpreter File Browser
+  async listFiles(sessionId: number, path: string = '.'): Promise<{
+    path: string
+    files: FileInfo[]
+    count: number
+  }> {
+    return (await this.client.get(`/postex/sessions/${sessionId}/files`, { params: { path } })).data
+  }
+
+  async getPwd(sessionId: number): Promise<{ path: string }> {
+    return (await this.client.get(`/postex/sessions/${sessionId}/files/pwd`)).data
+  }
+
+  async downloadFile(sessionId: number, path: string): Promise<{
+    filename: string
+    content: string
+    size: number
+  }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/files/download`, { path })).data
+  }
+
+  async uploadFile(sessionId: number, destination: string, file: File): Promise<{
+    success: boolean
+    message: string
+    destination: string
+  }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return (await this.client.post(`/postex/sessions/${sessionId}/files/upload?destination=${encodeURIComponent(destination)}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })).data
+  }
+
+  // Process Management
+  async listProcesses(sessionId: number): Promise<{
+    processes: ProcessInfo[]
+    count: number
+  }> {
+    return (await this.client.get(`/postex/sessions/${sessionId}/processes`)).data
+  }
+
+  async killProcess(sessionId: number, pid: number): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/processes/kill`, { pid })).data
+  }
+
+  async migrateProcess(sessionId: number, pid: number): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/processes/migrate`, { pid })).data
+  }
+
+  // System Info
+  async getSysinfo(sessionId: number): Promise<SystemInfo> {
+    return (await this.client.get(`/postex/sessions/${sessionId}/sysinfo`)).data
+  }
+
+  async getUid(sessionId: number): Promise<{ user: string }> {
+    return (await this.client.get(`/postex/sessions/${sessionId}/getuid`)).data
+  }
+
+  async getPrivs(sessionId: number): Promise<{ privileges: string[]; count: number }> {
+    return (await this.client.get(`/postex/sessions/${sessionId}/getprivs`)).data
+  }
+
+  // Privilege Escalation
+  async getSystem(sessionId: number): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/getsystem`)).data
+  }
+
+  async suggestExploits(sessionId: number): Promise<{ job_id?: string; uuid?: string; status: string }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/suggest`)).data
+  }
+
+  // Hashdump
+  async hashdump(sessionId: number): Promise<{
+    hashes: Array<{ username: string; rid: string; lm_hash: string; ntlm_hash: string }>
+    count: number
+    raw: string
+  }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/hashdump`)).data
+  }
+
+  // Screenshot
+  async takeScreenshot(sessionId: number): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/postex/sessions/${sessionId}/screenshot`)).data
   }
 }
 
