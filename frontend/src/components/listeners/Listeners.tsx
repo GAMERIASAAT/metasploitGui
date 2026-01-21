@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useListenerStore } from '../../store/listenerStore'
 import { api } from '../../services/api'
+import { notify } from '../../hooks/useNotifications'
 import { Radio, Plus, Trash2, RefreshCw, X, Play, Server } from 'lucide-react'
 
 interface CommonPayload {
@@ -48,9 +49,11 @@ export default function Listeners() {
 
     try {
       await createHandler(formData.payload, formData.lhost, parseInt(formData.lport))
+      notify.listenerStarted(formData.payload, parseInt(formData.lport))
       setShowCreateModal(false)
       setFormData({ ...formData, lport: String(parseInt(formData.lport) + 1) })
     } catch (e) {
+      notify.error('Handler Failed', 'Failed to create handler')
       setError('Failed to create handler')
     } finally {
       setCreating(false)
@@ -125,6 +128,7 @@ export default function Listeners() {
                 onClick={() => {
                   if (confirm('Are you sure you want to kill this job?')) {
                     killJob(job.id)
+                    notify.info('Listener Stopped', `Job ${job.id} has been terminated`)
                   }
                 }}
                 className="p-2 text-gray-400 hover:text-msf-red transition-colors"

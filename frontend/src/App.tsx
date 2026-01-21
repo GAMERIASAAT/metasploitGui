@@ -3,8 +3,10 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import { useTerminalStore } from './store/terminalStore'
 import { socketService } from './services/socket'
+import { useSessionNotifications } from './hooks/useNotifications'
 import Layout from './components/common/Layout'
 import Login from './components/common/Login'
+import Toast from './components/common/Toast'
 import Dashboard from './components/dashboard/Dashboard'
 import Sessions from './components/sessions/Sessions'
 import Modules from './components/modules/Modules'
@@ -31,6 +33,9 @@ function App() {
   const { isAuthenticated, checkAuth } = useAuthStore()
   const { activeSessionTerminal, closeSessionTerminal } = useTerminalStore()
   const location = useLocation()
+
+  // Enable session notifications
+  useSessionNotifications()
 
   useEffect(() => {
     checkAuth()
@@ -85,6 +90,9 @@ function App() {
           onClose={closeSessionTerminal}
         />
       )}
+
+      {/* Toast notifications */}
+      <Toast />
     </>
   )
 }

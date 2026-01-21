@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import NotificationCenter from './NotificationCenter'
 import {
   LayoutDashboard,
   Users,
@@ -110,19 +111,29 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar (mobile) */}
-        <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-msf-darker border-b border-msf-border">
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-4 py-3 bg-msf-darker border-b border-msf-border">
+          {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 text-gray-400 hover:text-white"
+            className="lg:hidden p-2 text-gray-400 hover:text-white"
           >
             <Menu className="w-6 h-6" />
           </button>
-          <div className="flex items-center gap-2">
+
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-2">
             <Shield className="w-6 h-6 text-msf-accent" />
             <span className="font-bold text-white">MSF GUI</span>
           </div>
-          <div className="w-10" />
+
+          {/* Desktop spacer */}
+          <div className="hidden lg:block" />
+
+          {/* Right side - Notifications */}
+          <div className="flex items-center gap-2">
+            <NotificationCenter />
+          </div>
         </header>
 
         {/* Page content */}

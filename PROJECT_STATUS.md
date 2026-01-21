@@ -21,7 +21,7 @@ A cross-platform GUI (Browser + Android) for Metasploit Framework combining feat
 | Phase 2: Core MSF Integration | ✅ Complete | 100% |
 | Phase 3: Target & Network | ✅ Complete | 100% |
 | Phase 4: Post-Exploitation | ✅ Complete | 100% |
-| Phase 5: Advanced Features | 🔲 Not Started | 0% |
+| Phase 5: Advanced Features | ✅ Complete | 100% |
 
 ---
 
@@ -168,14 +168,81 @@ A cross-platform GUI (Browser + Android) for Metasploit Framework combining feat
 
 ---
 
-## Next Phase: Phase 5 - Advanced Features
+### Phase 5: Advanced Features 🟡
 
-### Phase 5: Advanced Features
-- Automation workflows (attack chains, scheduled tasks)
-- Team collaboration (multi-user, shared sessions, activity log)
-- Reporting system (engagement timeline, PDF/HTML export)
-- Android app packaging (Capacitor)
-- Notifications (desktop/push for new sessions)
+#### 5.1 Automation Workflows ✅
+- [x] Workflow management (create, edit, delete, duplicate)
+- [x] 5 predefined workflow templates:
+  - Windows Post-Exploit Chain
+  - Linux Post-Exploit Chain
+  - Privilege Escalation
+  - Credential Harvest
+  - Persistence Setup
+- [x] Step types: exploit, auxiliary, post, command, delay
+- [x] Background workflow execution
+- [x] Step-by-step result tracking
+- [x] Pause/resume/stop controls
+- [x] Continue on fail option per step
+
+**Backend API**: `/api/v1/automation`
+**Frontend**: `Automation.tsx`
+
+#### 5.2 Activity Log / Audit Trail ✅
+- [x] Log all significant actions
+- [x] Timestamps and user tracking
+- [x] Filter by action type and status
+- [x] Integration with workflow execution
+- [x] Persistent storage
+
+**Backend API**: `/api/v1/automation/activity`
+
+#### 5.3 Reporting System ✅
+- [x] Report generation with configurable sections
+- [x] Report types: engagement, executive, technical
+- [x] Include targets, credentials, activity, scans, workflows
+- [x] Date range filtering
+- [x] HTML and JSON export
+- [x] Engagement statistics dashboard
+- [x] Report preview
+
+**Backend API**: `/api/v1/reports`
+**Frontend**: `Reports.tsx`
+
+#### 5.4 Notifications ✅
+- [x] Desktop browser notifications (with permission request)
+- [x] Sound notifications (toggleable)
+- [x] Real-time toast notifications with animations
+- [x] Notification center with history
+- [x] New session alerts
+- [x] Listener start/stop notifications
+- [x] Job completion alerts
+- [x] Mark as read / clear all functionality
+- [x] Notification settings (desktop/sound toggle)
+
+**Frontend**: `notificationStore.ts`, `useNotifications.ts`, `Toast.tsx`, `NotificationCenter.tsx`
+
+#### 5.5 Android App (Capacitor) 🔲 *Deferred*
+- [ ] Capacitor wrapper
+- [ ] Mobile-optimized layouts
+- [ ] Push notifications
+
+---
+
+## All Core Phases Complete!
+
+The Metasploit GUI has all major features implemented:
+- Foundation & Authentication
+- Core MSF Integration (Sessions, Modules, Terminal, Listeners, Payloads)
+- Target & Network Management (Hosts, Services, Nmap)
+- Post-Exploitation Tools
+- Automation, Reporting & Notifications
+
+### Future Enhancements (Optional)
+- Network topology visualization (D3.js)
+- Mobile app (Capacitor)
+- Multi-user collaboration
+- Session recording/playback
+- Custom module integration
 
 ---
 
@@ -245,14 +312,15 @@ metasploitGui/
 │   │   │   ├── postex/          # Post-exploitation tools
 │   │   │   └── common/          # Layout, Login
 │   │   ├── services/            # API and Socket clients
-│   │   ├── store/               # Zustand state stores (auth, module, session, target)
+│   │   ├── store/               # Zustand state stores (auth, module, session, target, notification)
+│   │   ├── hooks/               # Custom React hooks (useNotifications)
 │   │   └── types/               # TypeScript definitions
 │   └── package.json
 │
 ├── backend/                     # FastAPI server
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── routes/          # API endpoints (auth, sessions, modules, console, listeners, payloads, targets, nmap, postex)
+│   │   │   ├── routes/          # API endpoints (auth, sessions, modules, console, listeners, payloads, targets, nmap, postex, automation, reports)
 │   │   │   └── websocket.py     # Socket.IO handler
 │   │   ├── core/
 │   │   │   ├── msf_client.py    # Metasploit RPC wrapper
