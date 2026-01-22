@@ -311,3 +311,120 @@ export interface AuthToken {
   access_token: string
   token_type: string
 }
+
+// ============== Phishing Types ==============
+
+export interface SMTPConfig {
+  id?: string
+  host: string
+  port: number
+  username: string
+  password: string
+  from_email: string
+  from_name?: string
+  use_tls?: boolean
+  created_at?: string
+}
+
+export interface EmailTemplate {
+  id?: string
+  name: string
+  subject: string
+  body_html: string
+  body_text?: string
+  category?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PhishingTarget {
+  id?: string
+  email: string
+  first_name?: string
+  last_name?: string
+  position?: string
+  department?: string
+  custom_fields?: Record<string, string>
+}
+
+export interface TargetGroup {
+  id?: string
+  name: string
+  description?: string
+  targets: PhishingTarget[]
+  created_at?: string
+}
+
+export interface LandingPage {
+  id?: string
+  name: string
+  html_content: string
+  capture_credentials?: boolean
+  capture_fields?: string[]
+  redirect_url?: string
+  cloned_from?: string
+  created_at?: string
+}
+
+export interface PhishingCampaign {
+  id?: string
+  name: string
+  description?: string
+  status: 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'failed'
+  template_id: string
+  landing_page_id?: string
+  target_group_id: string
+  smtp_config_id?: string
+  scheduled_at?: string
+  send_interval_seconds?: number
+  track_opens?: boolean
+  track_clicks?: boolean
+  total_targets: number
+  emails_sent: number
+  emails_opened: number
+  links_clicked: number
+  credentials_captured: number
+  created_at?: string
+  updated_at?: string
+  completed_at?: string
+  error?: string
+}
+
+export interface CapturedCredential {
+  id: string
+  campaign_id: string
+  target_id: string
+  target_email: string
+  username?: string
+  password?: string
+  other_fields?: Record<string, string>
+  ip_address: string
+  user_agent: string
+  captured_at: string
+}
+
+export interface TrackingEvent {
+  id: string
+  campaign_id: string
+  target_id: string
+  event_type: 'email_sent' | 'email_opened' | 'link_clicked' | 'creds_submitted'
+  ip_address?: string
+  user_agent?: string
+  timestamp: string
+}
+
+export interface CampaignStats {
+  campaign: PhishingCampaign
+  stats: {
+    total_targets: number
+    emails_sent: number
+    emails_opened: number
+    links_clicked: number
+    credentials_captured: number
+    open_rate: number
+    click_rate: number
+    capture_rate: number
+  }
+  events: TrackingEvent[]
+  credentials: CapturedCredential[]
+}

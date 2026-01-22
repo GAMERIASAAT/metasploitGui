@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData } from '../types'
+import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData, SMTPConfig, EmailTemplate, TargetGroup, LandingPage, PhishingCampaign, CapturedCredential, CampaignStats } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -663,6 +663,117 @@ class ApiClient {
     activity: { total: number }
   }> {
     return (await this.client.get('/reports/stats/summary')).data
+  }
+
+  // ==================== Phishing ====================
+
+  // SMTP Configuration
+  async getSMTPConfigs(): Promise<{ configs: SMTPConfig[] }> {
+    return (await this.client.get('/phishing/smtp')).data
+  }
+
+  async createSMTPConfig(config: Omit<SMTPConfig, 'id' | 'created_at'>): Promise<SMTPConfig> {
+    return (await this.client.post('/phishing/smtp', config)).data
+  }
+
+  async testSMTPConfig(config: Omit<SMTPConfig, 'id' | 'created_at'>): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post('/phishing/smtp/test', config)).data
+  }
+
+  // Email Templates
+  async getEmailTemplates(category?: string): Promise<{ templates: EmailTemplate[]; count: number }> {
+    const params = category ? `?category=${category}` : ''
+    return (await this.client.get(`/phishing/templates${params}`)).data
+  }
+
+  async getPrebuiltTemplates(): Promise<{ templates: EmailTemplate[] }> {
+    return (await this.client.get('/phishing/templates/prebuilt')).data
+  }
+
+  async createEmailTemplate(template: Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>): Promise<EmailTemplate> {
+    return (await this.client.post('/phishing/templates', template)).data
+  }
+
+  async updateEmailTemplate(templateId: string, template: Partial<EmailTemplate>): Promise<EmailTemplate> {
+    return (await this.client.put(`/phishing/templates/${templateId}`, template)).data
+  }
+
+  async deleteEmailTemplate(templateId: string): Promise<void> {
+    await this.client.delete(`/phishing/templates/${templateId}`)
+  }
+
+  // Target Groups
+  async getTargetGroups(): Promise<{ groups: TargetGroup[]; count: number }> {
+    return (await this.client.get('/phishing/targets')).data
+  }
+
+  async createTargetGroup(group: Omit<TargetGroup, 'id' | 'created_at'>): Promise<TargetGroup> {
+    return (await this.client.post('/phishing/targets', group)).data
+  }
+
+  async importTargetsCSV(groupId: string, csvData: string): Promise<{ imported: number; total: number }> {
+    return (await this.client.post(`/phishing/targets/${groupId}/import`, { csv_data: csvData })).data
+  }
+
+  async deleteTargetGroup(groupId: string): Promise<void> {
+    await this.client.delete(`/phishing/targets/${groupId}`)
+  }
+
+  // Landing Pages
+  async getLandingPages(): Promise<{ pages: LandingPage[]; count: number }> {
+    return (await this.client.get('/phishing/landing-pages')).data
+  }
+
+  async getPrebuiltLandingPages(): Promise<{ pages: LandingPage[] }> {
+    return (await this.client.get('/phishing/landing-pages/prebuilt')).data
+  }
+
+  async createLandingPage(page: Omit<LandingPage, 'id' | 'created_at'>): Promise<LandingPage> {
+    return (await this.client.post('/phishing/landing-pages', page)).data
+  }
+
+  async cloneWebsite(url: string, name: string): Promise<LandingPage> {
+    return (await this.client.post('/phishing/landing-pages/clone', { url, name })).data
+  }
+
+  async deleteLandingPage(pageId: string): Promise<void> {
+    await this.client.delete(`/phishing/landing-pages/${pageId}`)
+  }
+
+  // Campaigns
+  async getPhishingCampaigns(status?: string): Promise<{ campaigns: PhishingCampaign[]; count: number }> {
+    const params = status ? `?status=${status}` : ''
+    return (await this.client.get(`/phishing/campaigns${params}`)).data
+  }
+
+  async getPhishingCampaign(campaignId: string): Promise<PhishingCampaign> {
+    return (await this.client.get(`/phishing/campaigns/${campaignId}`)).data
+  }
+
+  async createPhishingCampaign(campaign: Omit<PhishingCampaign, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'total_targets' | 'emails_sent' | 'emails_opened' | 'links_clicked' | 'credentials_captured'>): Promise<PhishingCampaign> {
+    return (await this.client.post('/phishing/campaigns', campaign)).data
+  }
+
+  async launchCampaign(campaignId: string, baseUrl: string): Promise<{ success: boolean; message: string }> {
+    return (await this.client.post(`/phishing/campaigns/${campaignId}/launch`, { base_url: baseUrl })).data
+  }
+
+  async pauseCampaign(campaignId: string): Promise<{ success: boolean }> {
+    return (await this.client.post(`/phishing/campaigns/${campaignId}/pause`)).data
+  }
+
+  async deleteCampaign(campaignId: string): Promise<void> {
+    await this.client.delete(`/phishing/campaigns/${campaignId}`)
+  }
+
+  async getCampaignStats(campaignId: string): Promise<CampaignStats> {
+    return (await this.client.get(`/phishing/campaigns/${campaignId}/stats`)).data
+  }
+
+  // Captured Credentials
+  async getCapturedCredentials(campaignId?: string): Promise<{ credentials: CapturedCredential[]; count: number }> {
+    const params = campaignId ? `?campaign_id=${campaignId}` : ''
+    return (await this.client.get(`/phishing/captured${params}`)).data
   }
 }
 

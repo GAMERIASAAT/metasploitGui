@@ -16,6 +16,7 @@ import {
   Crosshair,
   GitBranch,
   FileText,
+  Mail,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -30,6 +31,7 @@ const navItems = [
   { path: '/modules', label: 'Modules', icon: Box },
   { path: '/listeners', label: 'Listeners', icon: Radio },
   { path: '/payloads', label: 'Payloads', icon: FileCode },
+  { path: '/phishing', label: 'Phishing', icon: Mail },
   { path: '/automation', label: 'Automation', icon: GitBranch },
   { path: '/reports', label: 'Reports', icon: FileText },
   { path: '/terminal', label: 'Terminal', icon: Terminal },

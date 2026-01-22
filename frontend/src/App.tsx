@@ -16,6 +16,7 @@ import Targets from './components/targets/Targets'
 import PostExploitation from './components/postex/PostExploitation'
 import Automation from './components/automation/Automation'
 import Reports from './components/reports/Reports'
+import Phishing from './components/phishing/Phishing'
 import Terminal from './components/terminal/Terminal'
 import SessionTerminal from './components/sessions/SessionTerminal'
 
@@ -72,6 +73,7 @@ function App() {
                   <Route path="/postex" element={<PostExploitation />} />
                   <Route path="/automation" element={<Automation />} />
                   <Route path="/reports" element={<Reports />} />
+                  <Route path="/phishing" element={<Phishing />} />
                   {/* Terminal placeholder - actual Terminal rendered below for persistence */}
                   <Route path="/terminal" element={null} />
                 </Routes>

@@ -10,7 +10,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.msf_client import msf_client
-from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports
+from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports, phishing
 from app.api.websocket import sio
 
 # Configure logging
@@ -75,6 +75,7 @@ app.include_router(nmap.router, prefix=f"{settings.api_prefix}/nmap", tags=["Nma
 app.include_router(postex.router, prefix=f"{settings.api_prefix}/postex", tags=["Post-Exploitation"])
 app.include_router(automation.router, prefix=f"{settings.api_prefix}/automation", tags=["Automation"])
 app.include_router(reports.router, prefix=f"{settings.api_prefix}/reports", tags=["Reports"])
+app.include_router(phishing.router, prefix=f"{settings.api_prefix}/phishing", tags=["Phishing"])
 
 # Mount Socket.IO
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
