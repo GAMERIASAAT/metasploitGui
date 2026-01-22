@@ -53,3 +53,4 @@ frontend/android/.gradle/
 # Misc
 *.bak
 *.tmp
+.claude/settings.local.json
