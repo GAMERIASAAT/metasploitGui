@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData, SMTPConfig, EmailTemplate, TargetGroup, LandingPage, PhishingCampaign, CapturedCredential, CampaignStats } from '../types'
+import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData, SMTPConfig, EmailTemplate, TargetGroup, LandingPage, PhishingCampaign, CapturedCredential, CampaignStats, Phishlet, PhishletTemplate, CapturedProxySession, EvilProxyStats } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -774,6 +774,56 @@ class ApiClient {
   async getCapturedCredentials(campaignId?: string): Promise<{ credentials: CapturedCredential[]; count: number }> {
     const params = campaignId ? `?campaign_id=${campaignId}` : ''
     return (await this.client.get(`/phishing/captured${params}`)).data
+  }
+
+  // ============== EvilProxy (2FA Bypass) ==============
+
+  // Phishlets
+  async getPhishlets(): Promise<{ phishlets: Phishlet[]; count: number }> {
+    return (await this.client.get('/evilproxy/phishlets')).data
+  }
+
+  async getPhishletTemplates(): Promise<{ templates: PhishletTemplate[] }> {
+    return (await this.client.get('/evilproxy/phishlets/templates')).data
+  }
+
+  async createPhishlet(phishlet: Omit<Phishlet, 'id' | 'created_at' | 'status'>): Promise<Phishlet> {
+    return (await this.client.post('/evilproxy/phishlets', phishlet)).data
+  }
+
+  async updatePhishlet(phishletId: string, updates: Partial<Phishlet>): Promise<Phishlet> {
+    return (await this.client.put(`/evilproxy/phishlets/${phishletId}`, updates)).data
+  }
+
+  async deletePhishlet(phishletId: string): Promise<void> {
+    await this.client.delete(`/evilproxy/phishlets/${phishletId}`)
+  }
+
+  async startPhishlet(phishletId: string): Promise<{ status: string; message: string; proxy_url: string; instructions: string[] }> {
+    return (await this.client.post(`/evilproxy/phishlets/${phishletId}/start`)).data
+  }
+
+  async stopPhishlet(phishletId: string): Promise<{ status: string }> {
+    return (await this.client.post(`/evilproxy/phishlets/${phishletId}/stop`)).data
+  }
+
+  // Captured Sessions
+  async getProxySessions(phishletId?: string): Promise<{ sessions: CapturedProxySession[]; count: number }> {
+    const params = phishletId ? `?phishlet_id=${phishletId}` : ''
+    return (await this.client.get(`/evilproxy/sessions${params}`)).data
+  }
+
+  async deleteProxySession(sessionId: string): Promise<void> {
+    await this.client.delete(`/evilproxy/sessions/${sessionId}`)
+  }
+
+  async exportSessionCookies(sessionId: string, format: 'json' | 'netscape' | 'header'): Promise<{ cookies?: Record<string, string>; format?: string; content?: string }> {
+    return (await this.client.post(`/evilproxy/sessions/${sessionId}/export`, { format })).data
+  }
+
+  // Stats
+  async getEvilProxyStats(): Promise<EvilProxyStats> {
+    return (await this.client.get('/evilproxy/stats')).data
   }
 }
 

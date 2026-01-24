@@ -72,6 +72,10 @@ export default function Phishing() {
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null)
 
+  // Preview states
+  const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
+  const [previewLandingPage, setPreviewLandingPage] = useState<LandingPage | null>(null)
+
   // Fetch data
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -88,10 +92,12 @@ export default function Phishing() {
         api.getEmailTemplates(),
         api.getPrebuiltTemplates(),
       ])
-      setTemplates(custom.templates)
-      setPrebuiltTemplates(prebuilt.templates)
+      console.log('Templates loaded:', { custom, prebuilt })
+      setTemplates(custom.templates || [])
+      setPrebuiltTemplates(prebuilt.templates || [])
     } catch (error) {
       console.error('Failed to fetch templates:', error)
+      notify.error('Error', 'Failed to load email templates')
     }
   }, [])
 
@@ -110,10 +116,12 @@ export default function Phishing() {
         api.getLandingPages(),
         api.getPrebuiltLandingPages(),
       ])
-      setLandingPages(custom.pages)
-      setPrebuiltPages(prebuilt.pages)
+      console.log('Landing pages loaded:', { custom, prebuilt })
+      setLandingPages(custom.pages || [])
+      setPrebuiltPages(prebuilt.pages || [])
     } catch (error) {
       console.error('Failed to fetch landing pages:', error)
+      notify.error('Error', 'Failed to load landing pages')
     }
   }, [])
 
@@ -373,19 +381,37 @@ export default function Phishing() {
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-white">Email Templates</h2>
-              <button
-                onClick={() => setShowTemplateModal(true)}
-                className="btn btn-primary flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                New Template
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchTemplates}
+                  className="btn btn-secondary flex items-center gap-2"
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowTemplateModal(true)}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Template
+                </button>
+              </div>
             </div>
 
             <div className="space-y-6">
               {/* Prebuilt Templates */}
               <div>
-                <h3 className="text-sm font-medium text-gray-400 mb-3">Prebuilt Templates</h3>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Prebuilt Templates ({prebuiltTemplates.length})</h3>
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading templates...
+                  </div>
+                ) : prebuiltTemplates.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No prebuilt templates available</p>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {prebuiltTemplates.map((template) => (
                     <div
@@ -400,16 +426,15 @@ export default function Phishing() {
                       </div>
                       <p className="text-sm text-gray-400 mb-3 line-clamp-2">{template.subject}</p>
                       <button
-                        onClick={() => {
-                          // Use template
-                        }}
+                        onClick={() => setPreviewTemplate(template)}
                         className="text-sm text-msf-blue hover:text-msf-blue/80"
                       >
-                        Use Template
+                        Preview
                       </button>
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Custom Templates */}
@@ -451,19 +476,37 @@ export default function Phishing() {
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-white">Landing Pages</h2>
-              <button
-                onClick={() => setShowLandingModal(true)}
-                className="btn btn-primary flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                New Page
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchLandingPages}
+                  className="btn btn-secondary flex items-center gap-2"
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowLandingModal(true)}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Page
+                </button>
+              </div>
             </div>
 
             <div className="space-y-6">
               {/* Prebuilt Pages */}
               <div>
-                <h3 className="text-sm font-medium text-gray-400 mb-3">Prebuilt Pages</h3>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Prebuilt Pages ({prebuiltPages.length})</h3>
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading landing pages...
+                  </div>
+                ) : prebuiltPages.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No prebuilt landing pages available</p>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {prebuiltPages.map((page) => (
                     <div
@@ -477,9 +520,16 @@ export default function Phishing() {
                       <p className="text-sm text-gray-400 mb-3">
                         Captures: {page.capture_fields?.join(', ')}
                       </p>
+                      <button
+                        onClick={() => setPreviewLandingPage(page)}
+                        className="text-sm text-msf-blue hover:text-msf-blue/80"
+                      >
+                        Preview
+                      </button>
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Custom Pages */}
@@ -510,8 +560,14 @@ export default function Phishing() {
                           </button>
                         </div>
                         {page.cloned_from && (
-                          <p className="text-xs text-gray-500">Cloned from: {page.cloned_from}</p>
+                          <p className="text-xs text-gray-500 mb-2">Cloned from: {page.cloned_from}</p>
                         )}
+                        <button
+                          onClick={() => setPreviewLandingPage(page)}
+                          className="text-sm text-msf-blue hover:text-msf-blue/80"
+                        >
+                          Preview
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -770,6 +826,26 @@ export default function Phishing() {
             setShowStatsModal(false)
             setCampaignStats(null)
           }}
+        />
+      )}
+
+      {/* Template Preview Modal */}
+      {previewTemplate && (
+        <TemplatePreviewModal
+          template={previewTemplate}
+          onClose={() => setPreviewTemplate(null)}
+          onUse={() => {
+            setShowCampaignModal(true)
+            setPreviewTemplate(null)
+          }}
+        />
+      )}
+
+      {/* Landing Page Preview Modal */}
+      {previewLandingPage && (
+        <LandingPagePreviewModal
+          page={previewLandingPage}
+          onClose={() => setPreviewLandingPage(null)}
         />
       )}
     </div>
@@ -1638,6 +1714,106 @@ function CampaignStatsModal({
           )}
         </div>
         <div className="p-4 border-t border-msf-border flex justify-end">
+          <button onClick={onClose} className="btn btn-primary">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Template Preview Modal
+function TemplatePreviewModal({
+  template,
+  onClose,
+  onUse,
+}: {
+  template: EmailTemplate
+  onClose: () => void
+  onUse: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-msf-border flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">{template.name}</h3>
+            <p className="text-sm text-gray-400">Subject: {template.subject}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 text-xs bg-msf-purple/20 text-msf-purple rounded">
+              {template.category}
+            </span>
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          <div className="bg-white rounded-lg overflow-hidden">
+            <iframe
+              srcDoc={template.body_html}
+              className="w-full h-[500px] border-0"
+              title="Email Preview"
+              sandbox="allow-same-origin"
+            />
+          </div>
+        </div>
+        <div className="p-4 border-t border-msf-border flex justify-between items-center">
+          <div className="text-sm text-gray-500">
+            Variables: {`{{first_name}}, {{last_name}}, {{email}}, {{tracking_url}}`}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn btn-secondary">
+              Close
+            </button>
+            <button onClick={onUse} className="btn btn-primary">
+              Use in Campaign
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Landing Page Preview Modal
+function LandingPagePreviewModal({
+  page,
+  onClose,
+}: {
+  page: LandingPage
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-msf-border flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">{page.name}</h3>
+            <p className="text-sm text-gray-400">
+              Captures: {page.capture_fields?.join(', ')}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          <div className="bg-white rounded-lg overflow-hidden">
+            <iframe
+              srcDoc={page.html_content}
+              className="w-full h-[600px] border-0"
+              title="Landing Page Preview"
+              sandbox="allow-same-origin"
+            />
+          </div>
+        </div>
+        <div className="p-4 border-t border-msf-border flex justify-between items-center">
+          <div className="text-sm text-gray-500">
+            {page.cloned_from ? `Cloned from: ${page.cloned_from}` : 'Custom page'}
+          </div>
           <button onClick={onClose} className="btn btn-primary">
             Close
           </button>
