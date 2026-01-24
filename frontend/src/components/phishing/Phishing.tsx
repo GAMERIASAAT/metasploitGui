@@ -10,6 +10,11 @@ import {
   SMTPConfig,
   CampaignStats,
   PhishingTarget,
+  BitMTarget,
+  BitMTemplate,
+  BitMSession,
+  CapturedBitMData,
+  BitMStats,
 } from '../../types'
 import {
   Mail,
@@ -36,9 +41,16 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Monitor,
+  Zap,
+  Cookie,
+  ArrowRight,
+  Server,
+  Download,
+  Square,
 } from 'lucide-react'
 
-type TabType = 'campaigns' | 'templates' | 'landing' | 'targets' | 'captured' | 'settings'
+type TabType = 'campaigns' | 'templates' | 'landing' | 'targets' | 'captured' | 'bitm' | 'settings'
 
 const STATUS_COLORS = {
   draft: 'bg-gray-500/20 text-gray-400',
@@ -63,6 +75,13 @@ export default function Phishing() {
   const [capturedCreds, setCapturedCreds] = useState<CapturedCredential[]>([])
   const [smtpConfigs, setSmtpConfigs] = useState<SMTPConfig[]>([])
 
+  // BitM states
+  const [bitmTargets, setBitmTargets] = useState<BitMTarget[]>([])
+  const [bitmTemplates, setBitmTemplates] = useState<BitMTemplate[]>([])
+  const [bitmSessions, setBitmSessions] = useState<BitMSession[]>([])
+  const [bitmCaptures, setBitmCaptures] = useState<CapturedBitMData[]>([])
+  const [bitmStats, setBitmStats] = useState<BitMStats | null>(null)
+
   // Modal states
   const [showCampaignModal, setShowCampaignModal] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
@@ -71,6 +90,13 @@ export default function Phishing() {
   const [showSMTPModal, setShowSMTPModal] = useState(false)
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null)
+
+  // BitM modal states
+  const [showBitMTargetModal, setShowBitMTargetModal] = useState(false)
+  const [showBitMSessionModal, setShowBitMSessionModal] = useState(false)
+  const [showBitMCaptureModal, setShowBitMCaptureModal] = useState(false)
+  const [selectedBitMCapture, setSelectedBitMCapture] = useState<CapturedBitMData | null>(null)
+  const [bitmSessionResult, setBitmSessionResult] = useState<{ session: BitMSession; instructions: string[]; technical_notes: string[] } | null>(null)
 
   // Preview states
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
@@ -143,6 +169,26 @@ export default function Phishing() {
     }
   }, [])
 
+  // BitM fetch functions
+  const fetchBitMData = useCallback(async () => {
+    try {
+      const [targetsData, templatesData, sessionsData, capturesData, statsData] = await Promise.all([
+        api.getBitMTargets(),
+        api.getBitMTemplates(),
+        api.getBitMSessions(),
+        api.getBitMCaptures(),
+        api.getBitMStats(),
+      ])
+      setBitmTargets(targetsData.targets)
+      setBitmTemplates(templatesData.templates)
+      setBitmSessions(sessionsData.sessions)
+      setBitmCaptures(capturesData.captures)
+      setBitmStats(statsData)
+    } catch (error) {
+      console.error('Failed to fetch BitM data:', error)
+    }
+  }, [])
+
   useEffect(() => {
     setIsLoading(true)
     Promise.all([
@@ -152,8 +198,9 @@ export default function Phishing() {
       fetchLandingPages(),
       fetchCapturedCreds(),
       fetchSMTPConfigs(),
+      fetchBitMData(),
     ]).finally(() => setIsLoading(false))
-  }, [fetchCampaigns, fetchTemplates, fetchTargetGroups, fetchLandingPages, fetchCapturedCreds, fetchSMTPConfigs])
+  }, [fetchCampaigns, fetchTemplates, fetchTargetGroups, fetchLandingPages, fetchCapturedCreds, fetchSMTPConfigs, fetchBitMData])
 
   // Actions
   const launchCampaign = async (campaign: PhishingCampaign) => {
@@ -206,6 +253,7 @@ export default function Phishing() {
     { id: 'landing' as TabType, label: 'Landing Pages', icon: Globe, count: landingPages.length + prebuiltPages.length },
     { id: 'targets' as TabType, label: 'Targets', icon: Target, count: targetGroups.length },
     { id: 'captured' as TabType, label: 'Captured', icon: Key, count: capturedCreds.length },
+    { id: 'bitm' as TabType, label: 'BitM Attack', icon: Monitor, count: bitmSessions.filter(s => s.status === 'active').length },
     { id: 'settings' as TabType, label: 'Settings', icon: Settings },
   ]
 
@@ -688,6 +736,429 @@ export default function Phishing() {
           </div>
         )}
 
+        {/* BitM Attack Tab */}
+        {activeTab === 'bitm' && (
+          <div className="p-6 space-y-6">
+            {/* BitM Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-msf-yellow" />
+                  Browser-in-the-Middle Attack
+                </h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Use a real browser to proxy victim sessions - bypasses most anti-phishing protections
+                </p>
+              </div>
+              <button
+                onClick={fetchBitMData}
+                className="btn btn-secondary flex items-center gap-2"
+                disabled={isLoading}
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            {/* BitM Stats */}
+            {bitmStats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-msf-darker border border-msf-border rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-msf-blue/20 rounded-lg">
+                      <Target className="w-5 h-5 text-msf-blue" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{bitmStats.total_targets}</p>
+                      <p className="text-sm text-gray-400">Targets</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-msf-darker border border-msf-border rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-msf-yellow/20 rounded-lg">
+                      <Monitor className="w-5 h-5 text-msf-yellow" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{bitmStats.active_sessions}</p>
+                      <p className="text-sm text-gray-400">Active Sessions</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-msf-darker border border-msf-border rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-msf-green/20 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-msf-green" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{bitmStats.authenticated_sessions}</p>
+                      <p className="text-sm text-gray-400">Authenticated</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-msf-darker border border-msf-border rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-msf-purple/20 rounded-lg">
+                      <Cookie className="w-5 h-5 text-msf-purple" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{bitmStats.captures_with_cookies}</p>
+                      <p className="text-sm text-gray-400">Cookies Captured</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Attack Flow Diagram */}
+            <div className="bg-msf-darker border border-msf-border rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-400 mb-4">How BitM Works</h3>
+              <div className="flex items-center justify-center gap-4 text-sm">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 bg-msf-red/20 rounded-lg flex items-center justify-center mb-2">
+                    <Globe className="w-7 h-7 text-msf-red" />
+                  </div>
+                  <span className="text-white">Victim</span>
+                </div>
+                <ArrowRight className="w-5 h-5 text-gray-500" />
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 bg-msf-yellow/20 rounded-lg flex items-center justify-center mb-2">
+                    <Monitor className="w-7 h-7 text-msf-yellow" />
+                  </div>
+                  <span className="text-white">Your Browser</span>
+                  <span className="text-xs text-gray-500">(Headless)</span>
+                </div>
+                <ArrowRight className="w-5 h-5 text-gray-500" />
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 bg-msf-green/20 rounded-lg flex items-center justify-center mb-2">
+                    <Server className="w-7 h-7 text-msf-green" />
+                  </div>
+                  <span className="text-white">Real Site</span>
+                  <span className="text-xs text-gray-500">(+ 2FA)</span>
+                </div>
+              </div>
+              <p className="text-center text-xs text-gray-500 mt-4">
+                The victim interacts with a real browser on your server via WebSocket. All session data is captured.
+              </p>
+            </div>
+
+            {/* Target Templates */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-400 mb-3">Quick Start Templates</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {bitmTemplates.filter(t => t.id !== 'custom').map((template) => (
+                  <div
+                    key={template.id}
+                    className="bg-msf-darker border border-msf-border rounded-lg p-4 hover:border-msf-accent transition-colors cursor-pointer"
+                    onClick={async () => {
+                      if (template.id === 'custom') {
+                        setShowBitMTargetModal(true)
+                      } else {
+                        try {
+                          await api.createBitMTarget({
+                            name: template.name,
+                            target_url: template.target_url,
+                            description: template.description,
+                            browser_type: template.browser_type as 'chromium' | 'firefox' | 'webkit',
+                            viewport_width: 1920,
+                            viewport_height: 1080,
+                            capture_screenshots: true,
+                            capture_network: true,
+                            capture_cookies: template.capture_cookies,
+                            capture_storage: true,
+                            auth_indicators: template.auth_indicators,
+                          })
+                          notify.success('Target Created', `${template.name} target added`)
+                          fetchBitMData()
+                        } catch (error) {
+                          notify.error('Error', 'Failed to create target')
+                        }
+                      }
+                    }}
+                  >
+                    <h4 className="font-medium text-white mb-1">{template.name}</h4>
+                    <p className="text-sm text-gray-400 mb-2">{template.description}</p>
+                    <p className="text-xs text-gray-500">{template.target_url}</p>
+                  </div>
+                ))}
+                <div
+                  className="bg-msf-darker border border-dashed border-msf-border rounded-lg p-4 hover:border-msf-accent transition-colors cursor-pointer flex flex-col items-center justify-center"
+                  onClick={() => setShowBitMTargetModal(true)}
+                >
+                  <Plus className="w-8 h-8 text-gray-500 mb-2" />
+                  <span className="text-gray-400">Custom Target</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Configured Targets */}
+            {bitmTargets.length > 0 && (
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-medium text-gray-400">Your Targets</h3>
+                  <button
+                    onClick={() => setShowBitMTargetModal(true)}
+                    className="btn btn-secondary text-sm flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Target
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {bitmTargets.map((target) => (
+                    <div
+                      key={target.id}
+                      className="bg-msf-darker border border-msf-border rounded-lg p-4"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-medium text-white">{target.name}</h4>
+                          <p className="text-sm text-gray-400">{target.target_url}</p>
+                          <div className="flex gap-2 mt-2">
+                            <span className="px-2 py-0.5 text-xs bg-msf-dark text-gray-400 rounded">
+                              {target.browser_type}
+                            </span>
+                            <span className="px-2 py-0.5 text-xs bg-msf-dark text-gray-400 rounded">
+                              {target.sessions_count || 0} sessions
+                            </span>
+                            <span className="px-2 py-0.5 text-xs bg-msf-dark text-gray-400 rounded">
+                              {target.captures_count || 0} captures
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const result = await api.startBitMSession(target.id!, 8443)
+                                setBitmSessionResult(result)
+                                setShowBitMSessionModal(true)
+                                notify.success('Session Started', 'BitM session is active')
+                                fetchBitMData()
+                              } catch (error) {
+                                notify.error('Error', 'Failed to start session')
+                              }
+                            }}
+                            className="btn btn-primary flex items-center gap-2"
+                          >
+                            <Play className="w-4 h-4" />
+                            Start Session
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (target.id && confirm(`Delete target "${target.name}"?`)) {
+                                await api.deleteBitMTarget(target.id)
+                                fetchBitMData()
+                              }
+                            }}
+                            className="p-2 text-gray-400 hover:text-msf-red"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Active Sessions */}
+            {bitmSessions.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Active Sessions</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-msf-border">
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Target</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Proxy URL</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Started</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bitmSessions.map((session) => (
+                        <tr key={session.id} className="border-b border-msf-border/50 hover:bg-msf-darker">
+                          <td className="py-3 px-4">
+                            <span className={`flex items-center gap-2 ${
+                              session.status === 'active' ? 'text-msf-yellow' :
+                              session.status === 'authenticated' ? 'text-msf-green' :
+                              session.status === 'closed' ? 'text-gray-500' : 'text-gray-400'
+                            }`}>
+                              {session.status === 'active' && <div className="w-2 h-2 bg-msf-yellow rounded-full animate-pulse" />}
+                              {session.status === 'authenticated' && <CheckCircle className="w-4 h-4" />}
+                              {session.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-white">{session.target_name}</td>
+                          <td className="py-3 px-4">
+                            <code className="text-xs text-msf-blue">{session.proxy_url}</code>
+                          </td>
+                          <td className="py-3 px-4 text-gray-400">
+                            {session.created_at ? new Date(session.created_at).toLocaleString() : '-'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(session.proxy_url || '')
+                                  notify.info('Copied', 'Proxy URL copied')
+                                }}
+                                className="p-1 text-gray-400 hover:text-white"
+                                title="Copy URL"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              {session.status === 'active' && (
+                                <>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.simulateBitMAuth(session.id!)
+                                        notify.success('Captured', 'Session authenticated and captured')
+                                        fetchBitMData()
+                                      } catch (error) {
+                                        notify.error('Error', 'Simulation failed')
+                                      }
+                                    }}
+                                    className="p-1 text-msf-green hover:text-msf-green/80"
+                                    title="Simulate Auth (Demo)"
+                                  >
+                                    <Zap className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.stopBitMSession(session.id!)
+                                        fetchBitMData()
+                                      } catch (error) {
+                                        notify.error('Error', 'Failed to stop session')
+                                      }
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-msf-red"
+                                    title="Stop"
+                                  >
+                                    <Square className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Delete this session?')) {
+                                    await api.deleteBitMSession(session.id!)
+                                    fetchBitMData()
+                                  }
+                                }}
+                                className="p-1 text-gray-400 hover:text-msf-red"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Captured Data */}
+            {bitmCaptures.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Captured Sessions</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-msf-border">
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Target</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Victim IP</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Cookies</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Captured</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bitmCaptures.map((capture) => (
+                        <tr key={capture.id} className="border-b border-msf-border/50 hover:bg-msf-darker">
+                          <td className="py-3 px-4 text-white">{capture.target_name}</td>
+                          <td className="py-3 px-4 font-mono text-gray-400">{capture.victim_ip}</td>
+                          <td className="py-3 px-4">
+                            <span className="text-msf-green">{Object.keys(capture.cookies).length} cookies</span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-400">
+                            {new Date(capture.captured_at).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedBitMCapture(capture)
+                                  setShowBitMCaptureModal(true)
+                                }}
+                                className="p-1 text-gray-400 hover:text-white"
+                                title="View Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const result = await api.exportBitMCapture(capture.id!, 'cookie-header')
+                                  navigator.clipboard.writeText(result.content || '')
+                                  notify.success('Copied', 'Cookie header copied')
+                                }}
+                                className="p-1 text-gray-400 hover:text-white"
+                                title="Copy Cookie Header"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const result = await api.exportBitMCapture(capture.id!, 'json')
+                                  navigator.clipboard.writeText(JSON.stringify(result.data, null, 2))
+                                  notify.success('Copied', 'JSON exported')
+                                }}
+                                className="p-1 text-gray-400 hover:text-white"
+                                title="Export JSON"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Delete this capture?')) {
+                                    await api.deleteBitMCapture(capture.id!)
+                                    fetchBitMData()
+                                  }
+                                }}
+                                className="p-1 text-gray-400 hover:text-msf-red"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {bitmTargets.length === 0 && bitmSessions.length === 0 && (
+              <div className="text-center py-12">
+                <Monitor className="w-16 h-16 mx-auto mb-4 text-gray-500" />
+                <h3 className="text-lg font-medium text-white mb-2">No BitM Attacks Configured</h3>
+                <p className="text-gray-400 mb-4">Select a template above to get started</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="p-6">
@@ -846,6 +1317,52 @@ export default function Phishing() {
         <LandingPagePreviewModal
           page={previewLandingPage}
           onClose={() => setPreviewLandingPage(null)}
+        />
+      )}
+
+      {/* BitM Target Creation Modal */}
+      {showBitMTargetModal && (
+        <BitMTargetModal
+          onClose={() => setShowBitMTargetModal(false)}
+          onCreate={async (target) => {
+            await api.createBitMTarget(target)
+            notify.success('Target Created', 'BitM target configured')
+            fetchBitMData()
+            setShowBitMTargetModal(false)
+          }}
+        />
+      )}
+
+      {/* BitM Session Started Modal */}
+      {showBitMSessionModal && bitmSessionResult && (
+        <BitMSessionModal
+          session={bitmSessionResult.session}
+          instructions={bitmSessionResult.instructions}
+          technicalNotes={bitmSessionResult.technical_notes}
+          onClose={() => {
+            setShowBitMSessionModal(false)
+            setBitmSessionResult(null)
+          }}
+        />
+      )}
+
+      {/* BitM Capture Detail Modal */}
+      {showBitMCaptureModal && selectedBitMCapture && (
+        <BitMCaptureModal
+          capture={selectedBitMCapture}
+          onClose={() => {
+            setShowBitMCaptureModal(false)
+            setSelectedBitMCapture(null)
+          }}
+          onExport={async (format) => {
+            const result = await api.exportBitMCapture(selectedBitMCapture.id!, format)
+            if (format === 'json') {
+              navigator.clipboard.writeText(JSON.stringify(result.data, null, 2))
+            } else {
+              navigator.clipboard.writeText(result.content || '')
+            }
+            notify.success('Exported', `Copied as ${format}`)
+          }}
         />
       )}
     </div>
@@ -1817,6 +2334,311 @@ function LandingPagePreviewModal({
           <button onClick={onClose} className="btn btn-primary">
             Close
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============== BitM Modal Components ==============
+
+function BitMTargetModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void
+  onCreate: (target: Omit<BitMTarget, 'id' | 'created_at' | 'sessions_count' | 'captures_count'>) => void
+}) {
+  const [name, setName] = useState('')
+  const [targetUrl, setTargetUrl] = useState('')
+  const [description, setDescription] = useState('')
+  const [browserType, setBrowserType] = useState<'chromium' | 'firefox' | 'webkit'>('chromium')
+  const [authIndicators, setAuthIndicators] = useState('')
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-lg">
+        <div className="p-4 border-b border-msf-border flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Create BitM Target</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Target Name *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="My Target"
+              className="w-full bg-msf-dark border border-msf-border rounded px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Target URL *</label>
+            <input
+              type="url"
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              placeholder="https://login.example.com"
+              className="w-full bg-msf-dark border border-msf-border rounded px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Description</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description"
+              className="w-full bg-msf-dark border border-msf-border rounded px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Browser Type</label>
+            <select
+              value={browserType}
+              onChange={(e) => setBrowserType(e.target.value as 'chromium' | 'firefox' | 'webkit')}
+              className="w-full bg-msf-dark border border-msf-border rounded px-3 py-2 text-white"
+            >
+              <option value="chromium">Chromium</option>
+              <option value="firefox">Firefox</option>
+              <option value="webkit">WebKit (Safari)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">
+              Auth Success Indicators (comma-separated URLs/paths)
+            </label>
+            <input
+              type="text"
+              value={authIndicators}
+              onChange={(e) => setAuthIndicators(e.target.value)}
+              placeholder="/dashboard, /home, myaccount"
+              className="w-full bg-msf-dark border border-msf-border rounded px-3 py-2 text-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              URLs or paths that indicate successful authentication
+            </p>
+          </div>
+        </div>
+        <div className="p-4 border-t border-msf-border flex justify-end gap-3">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button
+            onClick={() => {
+              if (name && targetUrl) {
+                onCreate({
+                  name,
+                  target_url: targetUrl,
+                  description: description || undefined,
+                  browser_type: browserType,
+                  viewport_width: 1920,
+                  viewport_height: 1080,
+                  capture_screenshots: true,
+                  capture_network: true,
+                  capture_cookies: true,
+                  capture_storage: true,
+                  auth_indicators: authIndicators.split(',').map(s => s.trim()).filter(Boolean),
+                })
+              }
+            }}
+            disabled={!name || !targetUrl}
+            className="btn btn-primary"
+          >
+            Create Target
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BitMSessionModal({
+  session,
+  instructions,
+  technicalNotes,
+  onClose,
+}: {
+  session: BitMSession
+  instructions: string[]
+  technicalNotes: string[]
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-4 border-b border-msf-border flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Zap className="w-5 h-5 text-msf-yellow" />
+              BitM Session Started
+            </h3>
+            <p className="text-sm text-gray-400">{session.target_name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-6">
+          {/* Proxy URL */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Phishing URL</h4>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-msf-darker p-3 rounded text-msf-green text-sm break-all">
+                {session.proxy_url}
+              </code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(session.proxy_url || '')
+                }}
+                className="p-2 text-gray-400 hover:text-white"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Instructions */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Instructions</h4>
+            <ol className="list-decimal list-inside space-y-2 text-sm text-white">
+              {instructions.map((instruction, i) => (
+                <li key={i}>{instruction}</li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Technical Notes */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Technical Details</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              {technicalNotes.map((note, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-msf-green mt-0.5 shrink-0" />
+                  {note}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Warning */}
+          <div className="bg-msf-yellow/10 border border-msf-yellow/30 rounded-lg p-4">
+            <p className="text-msf-yellow text-sm">
+              <strong>Important:</strong> Only use this feature in authorized penetration testing engagements.
+              Unauthorized use is illegal.
+            </p>
+          </div>
+        </div>
+        <div className="p-4 border-t border-msf-border flex justify-end">
+          <button onClick={onClose} className="btn btn-primary">Got it</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BitMCaptureModal({
+  capture,
+  onClose,
+  onExport,
+}: {
+  capture: CapturedBitMData
+  onClose: () => void
+  onExport: (format: 'json' | 'cookie-header' | 'cookie-jar' | 'burp') => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="p-4 border-b border-msf-border flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Captured Session</h3>
+            <p className="text-sm text-gray-400">{capture.target_name} - {capture.victim_ip}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-6">
+          {/* Status */}
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-2 px-3 py-1 bg-msf-green/20 text-msf-green rounded-full text-sm">
+              <CheckCircle className="w-4 h-4" />
+              Session Captured
+            </span>
+            <span className="text-sm text-gray-400">
+              {new Date(capture.captured_at).toLocaleString()}
+            </span>
+          </div>
+
+          {/* Cookies */}
+          {Object.keys(capture.cookies).length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                <Cookie className="w-4 h-4" />
+                Session Cookies ({Object.keys(capture.cookies).length})
+              </h4>
+              <div className="bg-msf-darker rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                {Object.entries(capture.cookies).map(([key, value]) => (
+                  <div key={key} className="flex flex-col">
+                    <span className="text-msf-yellow text-sm">{key}</span>
+                    <code className="text-xs text-gray-400 break-all">{value}</code>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Local Storage */}
+          {Object.keys(capture.local_storage).length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-400 mb-2">Local Storage</h4>
+              <div className="bg-msf-darker rounded-lg p-3 space-y-2">
+                {Object.entries(capture.local_storage).map(([key, value]) => (
+                  <div key={key} className="flex flex-col">
+                    <span className="text-msf-purple text-sm">{key}</span>
+                    <code className="text-xs text-gray-400 break-all">{value}</code>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Screenshots */}
+          {capture.screenshots.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-400 mb-2">Screenshots</h4>
+              <div className="flex gap-2 overflow-x-auto">
+                {capture.screenshots.map((screenshot, i) => (
+                  <div key={i} className="flex-shrink-0 w-32 h-20 bg-msf-darker rounded flex items-center justify-center text-gray-500 text-xs">
+                    Screenshot {i + 1}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Export Options */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Export Cookies</h4>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => onExport('cookie-header')} className="btn btn-secondary text-sm">
+                Cookie Header
+              </button>
+              <button onClick={() => onExport('json')} className="btn btn-secondary text-sm">
+                JSON
+              </button>
+              <button onClick={() => onExport('cookie-jar')} className="btn btn-secondary text-sm">
+                Netscape Format
+              </button>
+              <button onClick={() => onExport('burp')} className="btn btn-secondary text-sm">
+                Burp Format
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 border-t border-msf-border flex justify-end">
+          <button onClick={onClose} className="btn btn-primary">Close</button>
         </div>
       </div>
     </div>
