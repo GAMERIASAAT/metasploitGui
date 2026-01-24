@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.msf_client import msf_client
 from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports, phishing, evilproxy, bitm
 from app.api.websocket import sio
+from app.services.proxy_engine import proxy_engine
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +27,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
     logger.info("Starting Metasploit GUI Backend...")
+
+    # Initialize proxy engine for BitM/phishing attacks
+    try:
+        await proxy_engine.init()
+        logger.info("Proxy engine initialized")
+    except Exception as e:
+        logger.warning(f"Proxy engine init failed: {e}")
 
     # Try to connect to MSF RPC with a short timeout (non-blocking)
     try:
@@ -43,6 +51,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down...")
+    await proxy_engine.cleanup()
     await msf_client.disconnect()
 
 
