@@ -13,7 +13,7 @@ from datetime import datetime
 import uuid
 import asyncio
 
-router = APIRouter(prefix="/bitm", tags=["Browser-in-the-Middle"])
+router = APIRouter(tags=["Browser-in-the-Middle"])
 
 # In-memory storage for demo
 bitm_sessions: Dict[str, Dict] = {}
