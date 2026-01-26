@@ -96,7 +96,7 @@ export default function Phishing() {
   const [showBitMSessionModal, setShowBitMSessionModal] = useState(false)
   const [showBitMCaptureModal, setShowBitMCaptureModal] = useState(false)
   const [selectedBitMCapture, setSelectedBitMCapture] = useState<CapturedBitMData | null>(null)
-  const [bitmSessionResult, setBitmSessionResult] = useState<{ session: BitMSession; instructions: string[]; technical_notes: string[] } | null>(null)
+  const [bitmSessionResult, setBitmSessionResult] = useState<{ session: BitMSession | null; instructions: string[]; technical_notes: string[] } | null>(null)
 
   // Preview states
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
@@ -1336,9 +1336,9 @@ export default function Phishing() {
       {/* BitM Session Started Modal */}
       {showBitMSessionModal && bitmSessionResult && (
         <BitMSessionModal
-          session={bitmSessionResult.session}
-          instructions={bitmSessionResult.instructions}
-          technicalNotes={bitmSessionResult.technical_notes}
+          session={bitmSessionResult.session || null}
+          instructions={bitmSessionResult.instructions || []}
+          technicalNotes={bitmSessionResult.technical_notes || []}
           onClose={() => {
             setShowBitMSessionModal(false)
             setBitmSessionResult(null)
@@ -2460,11 +2460,13 @@ function BitMSessionModal({
   technicalNotes,
   onClose,
 }: {
-  session: BitMSession
+  session: BitMSession | null
   instructions: string[]
   technicalNotes: string[]
   onClose: () => void
 }) {
+  if (!session) return null
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-msf-card border border-msf-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -2474,7 +2476,7 @@ function BitMSessionModal({
               <Zap className="w-5 h-5 text-msf-yellow" />
               BitM Session Started
             </h3>
-            <p className="text-sm text-gray-400">{session.target_name}</p>
+            <p className="text-sm text-gray-400">{session.target_name || 'Unknown Target'}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X className="w-5 h-5" />

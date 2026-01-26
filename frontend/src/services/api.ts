@@ -853,7 +853,7 @@ class ApiClient {
 
   async startBitMSession(targetId: string, listenPort: number = 8443): Promise<{
     status: string
-    session: BitMSession
+    session: BitMSession | null
     instructions: string[]
     technical_notes: string[]
   }> {
