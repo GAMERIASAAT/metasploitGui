@@ -10,7 +10,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.msf_client import msf_client
-from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports, phishing, evilproxy, bitm
+from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports, phishing, evilproxy, bitm, browser_session
 from app.api.websocket import sio
 from app.services.proxy_engine import proxy_engine
 
@@ -87,6 +87,7 @@ app.include_router(reports.router, prefix=f"{settings.api_prefix}/reports", tags
 app.include_router(phishing.router, prefix=f"{settings.api_prefix}/phishing", tags=["Phishing"])
 app.include_router(evilproxy.router, prefix=f"{settings.api_prefix}/evilproxy", tags=["EvilProxy"])
 app.include_router(bitm.router, prefix=f"{settings.api_prefix}/bitm", tags=["Browser-in-the-Middle"])
+app.include_router(browser_session.router, prefix=f"{settings.api_prefix}/browser-session", tags=["Browser Sessions"])
 
 # Mount Socket.IO
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
