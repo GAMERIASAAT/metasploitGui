@@ -930,7 +930,7 @@ export default function Phishing() {
                           <button
                             onClick={async () => {
                               try {
-                                const result = await api.startBitMSession(target.id!, 8443)
+                                const result = await api.startBitMSession(target.id!, 8020)
                                 setBitmSessionResult(result)
                                 setShowBitMSessionModal(true)
                                 notify.success('Session Started', 'BitM session is active')
