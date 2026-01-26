@@ -279,6 +279,18 @@ class ProxyEngine:
         domain = request.match_info.get('domain', '')
         path = request.match_info.get('path', '')
 
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            return web.Response(
+                status=204,
+                headers={
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': '*',
+                    'Access-Control-Max-Age': '86400',
+                }
+            )
+
         if not domain:
             return web.Response(text="Missing domain", status=400)
 
@@ -308,9 +320,14 @@ class ProxyEngine:
             ) as resp:
                 body = await resp.read()
 
-                resp_headers = {}
+                resp_headers = {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': '*',
+                }
                 for key, value in resp.headers.items():
-                    if key.lower() not in {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}:
+                    if key.lower() not in {'content-encoding', 'content-length', 'transfer-encoding', 'connection',
+                                           'access-control-allow-origin'}:
                         resp_headers[key] = value
 
                 return web.Response(body=body, status=resp.status, headers=resp_headers)
@@ -464,6 +481,12 @@ class ProxyEngine:
                     status=resp.status,
                     headers=resp_headers
                 )
+
+                # Add CORS headers to allow all resources
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = '*'
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
 
                 # Set session tracking cookie
                 response.set_cookie('_proxy_session', session.id, max_age=86400, httponly=True, path='/')
