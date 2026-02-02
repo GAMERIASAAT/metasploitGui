@@ -10,9 +10,8 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.msf_client import msf_client
-from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports, phishing, evilproxy, bitm, browser_session
+from app.api.routes import sessions, modules, console, listeners, payloads, auth, targets, nmap, postex, automation, reports, phishing
 from app.api.websocket import sio
-from app.services.proxy_engine import proxy_engine
 
 # Configure logging
 logging.basicConfig(
@@ -27,13 +26,6 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
     logger.info("Starting Metasploit GUI Backend...")
-
-    # Initialize proxy engine for BitM/phishing attacks
-    try:
-        await proxy_engine.init()
-        logger.info("Proxy engine initialized")
-    except Exception as e:
-        logger.warning(f"Proxy engine init failed: {e}")
 
     # Try to connect to MSF RPC with a short timeout (non-blocking)
     try:
@@ -51,7 +43,6 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down...")
-    await proxy_engine.cleanup()
     await msf_client.disconnect()
 
 
@@ -85,9 +76,6 @@ app.include_router(postex.router, prefix=f"{settings.api_prefix}/postex", tags=[
 app.include_router(automation.router, prefix=f"{settings.api_prefix}/automation", tags=["Automation"])
 app.include_router(reports.router, prefix=f"{settings.api_prefix}/reports", tags=["Reports"])
 app.include_router(phishing.router, prefix=f"{settings.api_prefix}/phishing", tags=["Phishing"])
-app.include_router(evilproxy.router, prefix=f"{settings.api_prefix}/evilproxy", tags=["EvilProxy"])
-app.include_router(bitm.router, prefix=f"{settings.api_prefix}/bitm", tags=["Browser-in-the-Middle"])
-app.include_router(browser_session.router, prefix=f"{settings.api_prefix}/browser-session", tags=["Browser Sessions"])
 
 # Mount Socket.IO
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)

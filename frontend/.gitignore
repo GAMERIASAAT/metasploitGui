@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# APK files (release assets)
+*.apk
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties

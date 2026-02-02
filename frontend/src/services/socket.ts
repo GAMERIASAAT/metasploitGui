@@ -13,11 +13,16 @@ class SocketService {
   private sessionOpenCallbacks: SessionEventCallback[] = []
   private sessionCloseCallbacks: SessionEventCallback[] = []
   private sessionOutputCallbacks: Map<number, SessionOutputCallback[]> = new Map()
+  private serverUrl: string = '/'
+
+  setServerUrl(url: string) {
+    this.serverUrl = url
+  }
 
   connect() {
     if (this.socket?.connected) return
 
-    this.socket = io('/', {
+    this.socket = io(this.serverUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
     })

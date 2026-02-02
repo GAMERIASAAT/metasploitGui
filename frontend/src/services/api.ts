@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData, SMTPConfig, EmailTemplate, TargetGroup, LandingPage, PhishingCampaign, CapturedCredential, CampaignStats, Phishlet, PhishletTemplate, CapturedProxySession, EvilProxyStats, BitMTarget, BitMTemplate, BitMSession, CapturedBitMData, BitMStats } from '../types'
+import { AuthToken, Session, Module, Job, ModuleStats, PayloadTemplate, Target, TargetCreate, Service, ServiceCreate, Credential, CredentialCreate, PostModule, ProcessInfo, FileInfo, SystemInfo, Workflow, WorkflowStep, WorkflowTemplate, ActivityLogEntry, Report, ReportConfig, ReportData, SMTPConfig, EmailTemplate, TargetGroup, LandingPage, PhishingCampaign, CapturedCredential, CampaignStats, Phishlet, PhishletTemplate, CapturedProxySession, EvilProxyStats } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -25,6 +25,10 @@ class ApiClient {
 
     // Load token from storage
     this.token = localStorage.getItem('token')
+  }
+
+  updateBaseUrl(baseUrl: string) {
+    this.client.defaults.baseURL = baseUrl
   }
 
   setToken(token: string) {
@@ -824,84 +828,6 @@ class ApiClient {
   // Stats
   async getEvilProxyStats(): Promise<EvilProxyStats> {
     return (await this.client.get('/evilproxy/stats')).data
-  }
-
-  // ============== Browser-in-the-Middle (BitM) ==============
-
-  // Templates
-  async getBitMTemplates(): Promise<{ templates: BitMTemplate[] }> {
-    return (await this.client.get('/bitm/templates')).data
-  }
-
-  // Targets
-  async getBitMTargets(): Promise<{ targets: BitMTarget[]; count: number }> {
-    return (await this.client.get('/bitm/targets')).data
-  }
-
-  async createBitMTarget(target: Omit<BitMTarget, 'id' | 'created_at' | 'sessions_count' | 'captures_count'>): Promise<BitMTarget> {
-    return (await this.client.post('/bitm/targets', target)).data
-  }
-
-  async deleteBitMTarget(targetId: string): Promise<void> {
-    await this.client.delete(`/bitm/targets/${targetId}`)
-  }
-
-  // Sessions
-  async getBitMSessions(): Promise<{ sessions: BitMSession[]; count: number }> {
-    return (await this.client.get('/bitm/sessions')).data
-  }
-
-  async startBitMSession(targetId: string, listenPort: number = 8020): Promise<{
-    status: string
-    session: BitMSession | null
-    instructions: string[]
-    technical_notes: string[]
-  }> {
-    return (await this.client.post(`/bitm/sessions/start?target_id=${targetId}&listen_port=${listenPort}`)).data
-  }
-
-  async stopBitMSession(sessionId: string): Promise<{ status: string }> {
-    return (await this.client.post(`/bitm/sessions/${sessionId}/stop`)).data
-  }
-
-  async deleteBitMSession(sessionId: string): Promise<void> {
-    await this.client.delete(`/bitm/sessions/${sessionId}`)
-  }
-
-  async simulateBitMAuth(sessionId: string, victimIp: string = '192.168.1.100'): Promise<{
-    status: string
-    message: string
-    captured_data: CapturedBitMData
-  }> {
-    return (await this.client.post(`/bitm/sessions/${sessionId}/simulate-auth?victim_ip=${victimIp}`)).data
-  }
-
-  // Captures
-  async getBitMCaptures(): Promise<{ captures: CapturedBitMData[]; count: number }> {
-    return (await this.client.get('/bitm/captures')).data
-  }
-
-  async getBitMCaptureDetails(captureId: string): Promise<CapturedBitMData> {
-    return (await this.client.get(`/bitm/captures/${captureId}`)).data
-  }
-
-  async exportBitMCapture(captureId: string, format: 'json' | 'cookie-header' | 'cookie-jar' | 'burp'): Promise<{
-    format: string
-    data?: CapturedBitMData
-    content?: string
-    usage?: string
-    cookies?: Array<{ domain: string; name: string; value: string; path: string; secure: boolean; httpOnly: boolean }>
-  }> {
-    return (await this.client.post(`/bitm/captures/${captureId}/export?export_format=${format}`)).data
-  }
-
-  async deleteBitMCapture(captureId: string): Promise<void> {
-    await this.client.delete(`/bitm/captures/${captureId}`)
-  }
-
-  // Stats
-  async getBitMStats(): Promise<BitMStats> {
-    return (await this.client.get('/bitm/stats')).data
   }
 }
 
