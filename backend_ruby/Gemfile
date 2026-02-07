@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+
+ruby '>= 3.0'
+
+# Web Framework
+gem 'sinatra', '~> 4.0'
+gem 'sinatra-contrib', '~> 4.0'
+gem 'rackup', '~> 2.1'
+gem 'puma', '~> 6.4'
+
+# CORS
+gem 'rack-cors', '~> 2.0'
+
+# Authentication
+gem 'jwt', '~> 2.7'
+gem 'bcrypt', '~> 3.1'
+
+# MSF RPC Communication
+gem 'msgpack', '~> 1.7'
+
+# WebSocket Support
+gem 'faye-websocket', '~> 0.11'
+
+# Utilities
+gem 'json', '~> 2.7'
+gem 'concurrent-ruby', '~> 1.2'
+gem 'logger', '~> 1.6'
+
+# Development
+group :development do
+  gem 'rerun', '~> 0.14'
+  gem 'rubocop', '~> 1.60', require: false
+end
